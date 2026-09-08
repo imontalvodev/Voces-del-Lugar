@@ -41,7 +41,7 @@ Al no ser licencias OSI-aprobadas para uso comercial, el proyecto no es "open so
 
 ## Contribuir
 
-Guía de contribución pendiente de escribir (`CONTRIBUTING.md`). Mientras tanto, abre un issue para proponer cambios o discutir ideas.
+Ver [`CONTRIBUTING.md`](./CONTRIBUTING.md) para el flujo de trabajo, convenciones de commits y estado del proyecto.
 
 ## Licencia
 
