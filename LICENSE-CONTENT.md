@@ -1,6 +1,6 @@
 # Licencia del contenido
 
-Esta licencia aplica al **contenido generado por usuarios** del proyecto (historias, transcripciones, fotos, audio, vídeo subidos por narradores/recopiladores). No aplica al código fuente, que se rige por el archivo [`LICENSE`](./LICENSE) (PolyForm Noncommercial 1.0.0).
+Esta licencia aplica al **contenido generado por usuarios** del proyecto (historias, transcripciones, fotos, audio, vídeo subidos por narradores/recopiladores). No aplica al código fuente, que se rige por el archivo [`LICENSE.md`](./LICENSE.md) (PolyForm Noncommercial 1.0.0).
 
 Ver ADR-005 (`docs/ADR-005-licencias.md`) para el razonamiento completo de esta decisión.
 

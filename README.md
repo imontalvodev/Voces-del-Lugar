@@ -34,7 +34,7 @@ Ver fases completas en [`docs/VISION.md`](./docs/VISION.md#fases-de-alcance-a-al
 
 Este proyecto usa dos licencias distintas, con un requisito no negociable: **ningún fork o copia puede ser comercial**. Razonamiento completo en [`docs/ADR-005-licencias.md`](./docs/ADR-005-licencias.md).
 
-- **Código**: [PolyForm Noncommercial 1.0.0](./LICENSE)
+- **Código**: [PolyForm Noncommercial 1.0.0](./LICENSE.md)
 - **Contenido de usuarios** (historias, audio, fotos, vídeo): [CC BY-NC-SA 4.0](./LICENSE-CONTENT.md), configurable por historia
 
 Al no ser licencias OSI-aprobadas para uso comercial, el proyecto no es "open source" en sentido OSI estricto — se usa "código abierto" en sentido coloquial.
