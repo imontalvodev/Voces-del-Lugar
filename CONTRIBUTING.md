@@ -17,11 +17,13 @@ El proyecto está en **Fase 0 — Fundamentos**: visión, arquitectura y ADRs. T
 
 ## Flujo de trabajo
 
+Estructura de ramas: `main` (producción) ← `develop` (integración) ← `front` / `back` (una por área del monorepo) ← tu rama de trabajo.
+
 1. Abre un issue antes de empezar un cambio grande, para discutir el enfoque antes de invertir tiempo.
-2. Crea una rama a partir de `main` (`feat/nombre-corto`, `fix/nombre-corto`, `docs/nombre-corto`...).
+2. Crea tu rama a partir de `front` o `back` según el área en la que trabajes (`feat/nombre-corto`, `fix/nombre-corto`, `docs/nombre-corto`...). Para cambios que no encajan en ninguna área (docs de raíz, configuración de repo), parte de `develop`.
 3. Haz commits siguiendo [Conventional Commits](https://www.conventionalcommits.org/): `feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`. Mensaje en imperativo, explica el *por qué* si no es obvio.
-4. Abre un Pull Request contra `main`.
-5. `main` está protegida: no se permite push directo (aplica también a administradores), y todo PR necesita **al menos 1 aprobación** antes de mergear. Cuando exista CI (ver más abajo), también deberá pasar en verde.
+4. Abre un Pull Request contra `front` o `back` (según de dónde partiste). De ahí, `front`/`back` se integran en `develop`, y `develop` se promociona a `main` cuando está probado y estable.
+5. `main` está protegida: no se permite push directo (aplica también a administradores), y todo PR necesita **al menos 1 aprobación** antes de mergear. Cuando exista CI (ver más abajo), también deberá pasar en verde. `develop`, `front` y `back` no tienen protección todavía — se activará cuando se sume el primer colaborador externo.
 6. Si tu cambio afecta a una decisión de arquitectura (elección de librería, cambio de esquema, cambio de convención), añade o actualiza un ADR en `docs/` en el mismo PR — no lo dejes para después.
 
 ## Integración continua (CI)
