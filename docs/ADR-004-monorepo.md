@@ -2,7 +2,7 @@
 
 ## Contexto
 
-El proyecto tiene varias piezas que se despliegan por separado (backend, apps móviles, web) pero que evolucionan juntas y comparten personas contribuyendo. El framework de frontend (Flutter vs React Native + Next.js) y el lenguaje de backend aún no están cerrados (ver ADR-002, pendiente), así que la estructura debe ser válida para cualquiera de esas combinaciones.
+El proyecto tiene varias piezas que se despliegan por separado (backend, apps móviles, web) pero que evolucionan juntas y comparten personas contribuyendo. El framework de frontend (Flutter) y el lenguaje de backend (Python + FastAPI) ya están cerrados (ver ADR-002), así que la estructura refleja esa decisión.
 
 ## Decisión
 
@@ -30,7 +30,7 @@ historias-lugares/
 ├── docs/
 │   ├── adr/                   # Todos los Architecture Decision Records
 │   │   ├── ADR-001-vision-alcance.md
-│   │   ├── ADR-002-backend-lenguaje.md      (pendiente de cerrar)
+│   │   ├── ADR-002-backend-lenguaje.md
 │   │   ├── ADR-003-modelo-datos-postgis.md
 │   │   └── ADR-004-monorepo.md
 │   └── api/                   # Documentación de la API (o se autogenera desde el código)
@@ -42,13 +42,8 @@ historias-lugares/
 │   └── README.md              # Cómo levantar y testear SOLO el backend
 │
 ├── apps/
-│   ├── mobile/                 # App Android/iOS (Flutter, o React Native si se elige esa opción)
-│   │   └── README.md
-│   └── web/                    # Web (si se separa de mobile, ej. con React Native + Next.js)
+│   └── flutter/                 # App única: Android, iOS y Web desde la misma base de código
 │       └── README.md
-│
-├── shared/                     # Solo si aplica: tipos/contratos de API compartidos entre apps
-│                                # (ej. si se usa TypeScript en RN+Next, un paquete de tipos común)
 │
 ├── infra/
 │   ├── deploy/                 # Configuración de despliegue (Render/Fly.io, etc.)
@@ -59,12 +54,9 @@ historias-lugares/
     └── ISSUE_TEMPLATE/
 ```
 
-## Notas según la decisión de frontend que se tome
+## Decisión de frontend (Flutter)
 
-- **Si se elige Flutter**: `apps/mobile` y `apps/web` podrían fusionarse en una sola carpeta `apps/flutter/`, ya que Flutter compila a ambos desde la misma base de código. La carpeta `shared/` probablemente no haga falta.
-- **Si se elige React Native + Next.js**: se mantienen `apps/mobile` (Expo/RN) y `apps/web` (Next.js) separadas, y `shared/` cobra sentido para tipos TypeScript y lógica de cliente API compartida entre ambas.
-
-Esta ambigüedad es intencional: la estructura no obliga a decidir el frontend antes de empezar a montar el backend y la documentación base.
+Con Flutter elegido en ADR-002, `apps/mobile` y `apps/web` se fusionan en una única carpeta `apps/flutter/`, ya que Flutter compila a Android, iOS y Web desde la misma base de código. La carpeta `shared/` (tipos/contratos compartidos entre apps) no hace falta: no hay tipos que compartir entre el backend Python y un frontend Dart.
 
 ## CI/CD
 
