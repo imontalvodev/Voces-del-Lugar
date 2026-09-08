@@ -11,7 +11,7 @@ El proyecto está en **Fase 0 — Fundamentos**: visión, arquitectura y ADRs. T
 ## Stack técnico
 
 - **Backend**: Python + FastAPI — [`docs/ADR-002-backend-lenguaje.md`](./docs/ADR-002-backend-lenguaje.md)
-- **Frontend** (mobile + web): Flutter — mismo ADR-002
+- **Frontend** (mobile + web, carpeta única `apps/flutter/`): Flutter — mismo ADR-002 y [`docs/ADR-004-monorepo.md`](./docs/ADR-004-monorepo.md)
 - **Base de datos**: PostgreSQL + PostGIS — [`docs/ADR-003-modelo-datos-postgis.md`](./docs/ADR-003-modelo-datos-postgis.md)
 - **Estructura**: monorepo — [`docs/ADR-004-monorepo.md`](./docs/ADR-004-monorepo.md)
 
