@@ -37,6 +37,7 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE TABLE users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email           TEXT UNIQUE NOT NULL,
+    password_hash   TEXT NOT NULL,     -- nunca la contraseña en claro
     display_name    TEXT NOT NULL,
     role            TEXT NOT NULL DEFAULT 'contributor'
                     CHECK (role IN ('contributor', 'curator', 'admin')),
@@ -67,12 +68,17 @@ CREATE TABLE stories (
     narrator_name       TEXT,              -- puede diferir del autor (ej. "mi abuelo José")
     narrator_relation   TEXT,              -- ej. "abuelo", "vecino", opcional
     title               TEXT NOT NULL,
-    transcript          TEXT,              -- transcripción manual, opcional
+    body                TEXT,              -- texto de la historia; obligatorio si no hay audio
+    transcript          TEXT,              -- transcripción del audio, opcional y distinta del texto
+    narrator_consent    BOOLEAN NOT NULL,  -- el narrador, o su familia, acepta publicar
+    narrator_deceased   BOOLEAN NOT NULL DEFAULT false,
+    consent_recorded_at TIMESTAMPTZ,
     category            TEXT NOT NULL
                         CHECK (category IN ('anecdota', 'leyenda', 'oficio', 'tradicion', 'evento', 'otro')),
     decade_approx       INTEGER,           -- ej. 1970, para ubicar temporalmente la historia
     original_language   TEXT DEFAULT 'es',
-    license             TEXT NOT NULL DEFAULT 'CC-BY-SA-4.0',
+    license             TEXT NOT NULL DEFAULT 'CC-BY-SA-4.0'
+                        CHECK (license IN ('CC-BY-SA-4.0', 'CC-BY-4.0', 'CC0-1.0')),
     status              TEXT NOT NULL DEFAULT 'draft'
                         CHECK (status IN ('draft', 'pending_review', 'published', 'rejected')),
     created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -123,6 +129,18 @@ ORDER BY distance_m
 LIMIT 20;
 ```
 
+**Historias publicadas dentro del recuadro visible del mapa:**
+```sql
+SELECT s.id, s.title, p.name AS place_name
+FROM stories s
+JOIN places p ON p.id = s.place_id
+WHERE s.status = 'published'
+  AND ST_Intersects(
+        p.location,
+        ST_MakeEnvelope(:west, :south, :east, :north, 4326)::geography
+      );
+```
+
 **Historias pendientes de moderación:**
 ```sql
 SELECT * FROM stories WHERE status = 'pending_review' ORDER BY created_at;
@@ -132,7 +150,7 @@ SELECT * FROM stories WHERE status = 'pending_review' ORDER BY created_at;
 
 1. **`storage_key` en vez de URL completa** en `media_assets` — desacopla el modelo de datos del proveedor de storage concreto (R2, S3, etc.). La URL final se construye en la capa de aplicación, no se guarda hardcodeada.
 
-2. **`license` por historia, no global** — cada narrador puede en teoría elegir su licencia, aunque el valor por defecto sea `CC-BY-SA-4.0`. Esto es importante porque algunas familias podrían querer condiciones distintas (ej. no uso comercial de terceros, aunque el proyecto en sí no lucre).
+2. **`license` por historia, dentro de un conjunto abierto** — el valor por defecto es `CC-BY-SA-4.0`. Solo se aceptan `CC-BY-SA-4.0`, `CC-BY-4.0` y `CC0-1.0` (ver ADR-005). No hay opción no comercial: el archivo es open source.
 
 3. **`status` con estado de moderación explícito** — nada se publica automáticamente. Aunque al principio la moderación sea manual y la haga una sola persona, el modelo ya contempla el flujo correcto desde el día 1.
 
@@ -140,12 +158,19 @@ SELECT * FROM stories WHERE status = 'pending_review' ORDER BY created_at;
 
 5. **UUIDs como claves primarias** — mejor que IDs autoincrementales para un proyecto distribuido/open source: evita colisiones si en algún momento hay múltiples entornos (desarrollo local de cada contribuidor) y no revela volumen de datos por la URL.
 
+6. **`body` y `transcript` son cosas distintas** — `body` es el texto de la historia cuando se cuenta por escrito. `transcript` es la transcripción de un audio y puede llegar vacía. Publicar exige texto en `body` o al menos un audio.
+
+7. **El consentimiento se guarda** — `narrator_consent`, `narrator_deceased` y `consent_recorded_at`. Crear una historia exige `narrator_consent = true`.
+
+8. **Contraseña solo como hash** — `users.password_hash`. La sesión del MVP es un JWT. Quien se registra primero queda como `admin` para poder moderar el grupo de prueba.
+
 ## Migraciones
 
 Se gestionan con una herramienta de migraciones versionadas desde el primer commit (independientemente del lenguaje de backend elegido: Alembic si es Python, golang-migrate si es Go, etc.), nunca modificando el esquema a mano en producción.
 
 ## Consecuencias
 
+- Motor fijado para el entorno local: **PostgreSQL 16 con PostGIS 3.4** (`postgis/postgis:16-3.4`). `gen_random_uuid()` viene de serie desde PostgreSQL 13
 - Cualquier lenguaje/framework de backend que se elija en el ADR-002 debe tener soporte maduro de PostGIS (todos los candidatos evaluados lo tienen)
 - Las consultas de proximidad quedan resueltas de forma eficiente sin lógica geoespacial manual en la aplicación
 - El modelo queda listo para fase de vídeo sin necesidad de rediseño, solo una migración aditiva

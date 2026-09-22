@@ -23,8 +23,8 @@ Crear un espacio digital, libre y abierto, donde cualquier persona pueda registr
 
 - Un archivo colectivo y libre de historia oral local, anclado geográficamente
 - Una herramienta pensada para que subir una historia sea tan sencillo como grabar un audio
-- Software libre y de código abierto, sin ánimo de lucro, sostenido por comunidad
-- Contenido bajo licencias abiertas, pensado para durar y para no depender de una sola empresa o servidor
+- Software libre con licencia OSI (MIT) y gratuito para quien lo usa: no se cobra, no hay publicidad ni venta de datos. Sostenido por comunidad
+- Contenido bajo licencias abiertas (CC BY-SA 4.0 por defecto), pensado para durar y para no depender de una sola empresa o servidor
 
 ## Qué NO es el proyecto (por ahora)
 
@@ -37,7 +37,7 @@ Crear un espacio digital, libre y abierto, donde cualquier persona pueda registr
 ## Valores del proyecto
 
 1. **Las personas por encima de la tecnología** — cualquier decisión técnica se subordina a que narrar una historia sea fácil, incluso para alguien mayor con poca soltura digital
-2. **Apertura** — código abierto, licencias de contenido abiertas, decisiones documentadas y públicas
+2. **Apertura** — open source (OSI), licencias de contenido abiertas, decisiones documentadas y públicas
 3. **Respeto y consentimiento** — quien narra decide qué se publica y bajo qué licencia; se cuida especialmente el caso de narradores que ya no puedan dar su consentimiento directamente
 4. **Sostenibilidad antes que crecimiento rápido** — se prioriza que el proyecto pueda mantenerse con pocos recursos a largo plazo, frente a crecer rápido y quemarse
 

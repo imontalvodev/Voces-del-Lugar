@@ -24,20 +24,39 @@ Ver [`docs/VISION.md`](./docs/VISION.md) para la visión completa del proyecto.
 
 Todas las decisiones de arquitectura se documentan como ADRs (Architecture Decision Records) en [`docs/`](./docs/), explicando no solo qué se decidió sino por qué.
 
+## Arrancar en local
+
+Hace falta Docker. Las librerías de Python van al `.venv` de la raíz, no al sistema. Flutter solo para la app (`flutter` en el `PATH`; en esta máquina el SDK puede estar en `~/flutter`).
+
+```bash
+docker compose up -d db
+.venv/bin/pip install -r backend/requirements-dev.txt
+cd backend && ../.venv/bin/alembic upgrade head && ../.venv/bin/uvicorn voces.main:app --reload --app-dir src --port 8001
+```
+
+En otra terminal, la app web:
+
+```bash
+cd apps/flutter
+flutter run -d web-server --web-port 8080 --dart-define=API_BASE=http://localhost:8001
+```
+
+`docker compose up` levanta también la API. Contrato en [`docs/api/mvp.md`](./docs/api/mvp.md). La primera cuenta que se registra es administradora y puede publicar.
+
 ## Estado del proyecto
 
-Fase 0 — Fundamentos: visión, arquitectura y ADRs en marcha. Aún no hay código de aplicación.
+Fase 1 — MVP: cuenta, historia con texto o audio, consentimiento, moderación y mapa. Aún no hay cola de procesado de media ni fotos.
 
 Ver fases completas en [`docs/VISION.md`](./docs/VISION.md#fases-de-alcance-a-alto-nivel).
 
 ## Licencias
 
-Este proyecto usa dos licencias distintas, con un requisito no negociable: **ningún fork o copia puede ser comercial**. Razonamiento completo en [`docs/ADR-005-licencias.md`](./docs/ADR-005-licencias.md).
+El proyecto es open source y gratuito. Razonamiento en [`docs/ADR-005-licencias.md`](./docs/ADR-005-licencias.md).
 
-- **Código**: [PolyForm Noncommercial 1.0.0](./LICENSE.md)
-- **Contenido de usuarios** (historias, audio, fotos, vídeo): [CC BY-NC-SA 4.0](./LICENSE-CONTENT.md), configurable por historia
+- **Código**: [MIT](./LICENSE.md), licencia OSI. Usar, copiar y modificar el software es gratis.
+- **Contenido de usuarios** (historias, audio, fotos, vídeo): [CC BY-SA 4.0](./LICENSE-CONTENT.md) por defecto. Cada historia puede elegir otra licencia abierta (`CC-BY-4.0` o `CC0-1.0`).
 
-Al no ser licencias OSI-aprobadas para uso comercial, el proyecto no es "open source" en sentido OSI estricto — se usa "código abierto" en sentido coloquial.
+Gratuito significa que esta instancia no cobra, no lleva publicidad y no vende datos. La licencia MIT no prohíbe que un tercero reutilice el código: esa prohibición impediría llamarlo open source.
 
 ## Contribuir
 

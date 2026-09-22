@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: voces
+      POSTGRES_PASSWORD: voces
+      POSTGRES_DB: voces
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - voces_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voces -d voces"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://voces:voces@db:5432/voces
+      JWT_SECRET: dev-only-change-me
+      MEDIA_ROOT: /data/media
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - voces_media:/data/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  voces_pg:
+  voces_media:

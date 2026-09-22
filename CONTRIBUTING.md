@@ -6,7 +6,7 @@ Antes de nada, lee [`docs/VISION.md`](./docs/VISION.md) para entender qué es el
 
 ## Estado actual del proyecto
 
-El proyecto está en **Fase 0 — Fundamentos**: visión, arquitectura y ADRs. Todavía no hay código de aplicación (`backend/` y `apps/flutter/` no existen aún, ver [`docs/ADR-004-monorepo.md`](./docs/ADR-004-monorepo.md) para la estructura prevista). Las instrucciones de entorno local (`docker-compose.yml`, cómo levantar backend/frontend) se documentarán aquí en cuanto exista ese código.
+El proyecto está en **Fase 1 — MVP**. Cómo levantarlo está en el [`README.md`](./README.md). Postgres y la API salen de `docker compose up`. La app está en `apps/flutter/`.
 
 ## Stack técnico
 
@@ -32,8 +32,8 @@ Aún no está montada (Fase 0). El plan ya está decidido y documentado internam
 
 ## Licencias de tu contribución
 
-- El código que aportes se licencia bajo [`LICENSE.md`](./LICENSE.md) (PolyForm Noncommercial 1.0.0) — al abrir un PR aceptas que tu contribución se distribuya bajo esos términos.
-- Si tu cambio afecta al modelo de contenido de usuarios (historias, media), revisa [`LICENSE-CONTENT.md`](./LICENSE-CONTENT.md) y [`docs/ADR-005-licencias.md`](./docs/ADR-005-licencias.md) — el requisito no negociable del proyecto es que **ningún fork o uso pueda ser comercial**.
+- El código que aportes se licencia bajo [`LICENSE.md`](./LICENSE.md) (MIT) — al abrir un PR aceptas que tu contribución se distribuya bajo esos términos.
+- Si tu cambio afecta al modelo de contenido de usuarios (historias, media), revisa [`LICENSE-CONTENT.md`](./LICENSE-CONTENT.md) y [`docs/ADR-005-licencias.md`](./docs/ADR-005-licencias.md). El contenido es abierto (CC BY-SA 4.0 por defecto). El proyecto es gratuito como producto: no se cobra por usarlo.
 
 ## Reportar bugs o proponer funcionalidades
 

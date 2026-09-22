@@ -1,0 +1,39 @@
+# Secretos y entorno local
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+backend/data/
+backend/pytest-cache-files-*/
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+build/
+coverage/
+
+# Android
+**/local.properties
+**/*.jks
+**/*.keystore
+android/.gradle/
+apps/flutter/android/.gradle/
+
+# iOS / macOS
+**/DerivedData/
+**/Pods/
+
+# Editores y sistema
+.idea/
+*.iml
+.DS_Store
+*.swp

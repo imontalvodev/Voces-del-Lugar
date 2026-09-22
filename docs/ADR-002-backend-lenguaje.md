@@ -33,5 +33,5 @@ El proyecto es open source, sin ánimo de lucro, y prioriza sostenibilidad a lar
 
 - Backend: Python 3.x + FastAPI, con Alembic para migraciones (ya anticipado como opción en ADR-003), y cola de trabajo (a definir: Celery/RQ/arq) para procesado asíncrono de media.
 - Frontend: Flutter único para mobile (Android/iOS) y web, con mapas vía `flutter_map` o `maplibre_gl` sobre tiles OpenStreetMap/MapLibre, evitando coste y dependencia de proveedores de mapas comerciales.
-- La estructura de monorepo de ADR-004 pasa de la rama condicional "si se elige Flutter" a definitiva: `apps/mobile` y `apps/web` se consolidan en `apps/flutter/`, y la carpeta `shared/` deja de ser necesaria (no hay tipos que compartir entre Python y Dart). **Pendiente**: actualizar ADR-004 para reflejar esto como decisión final, no como rama condicional.
+- La estructura de monorepo de ADR-004 refleja esta decisión: `apps/flutter/` es la única app (Android, iOS y web) y no hay carpeta `shared/` (no hay tipos que compartir entre Python y Dart).
 - Cualquier proveedor de hosting/despliegue debe soportar un servicio Python ASGI (Uvicorn/Gunicorn) para el backend.

@@ -20,39 +20,36 @@ La desventaja habitual del monorepo (necesitar tooling especializado tipo Bazel/
 ## Estructura propuesta
 
 ```
-historias-lugares/
-├── README.md                  # Qué es el proyecto, cómo arrancar en 5 minutos
-├── VISION.md                  # Documento de visión y alcance
-├── CONTRIBUTING.md            # Cómo levantar el entorno, convenciones, cómo proponer cambios
-├── LICENSE                    # Licencia del código (pendiente, ver ADR de licencias)
-├── docker-compose.yml         # Postgres+PostGIS y demás servicios locales, un comando para arrancar todo
+Voces-del-Lugar/
+├── README.md
+├── CONTRIBUTING.md
+├── LICENSE.md                 # MIT (código)
+├── LICENSE-CONTENT.md         # CC BY-SA 4.0 (historias)
+├── docker-compose.yml         # Postgres 16 + PostGIS 3.4 y la API
 │
 ├── docs/
-│   ├── adr/                   # Todos los Architecture Decision Records
-│   │   ├── ADR-001-vision-alcance.md
-│   │   ├── ADR-002-backend-lenguaje.md
-│   │   ├── ADR-003-modelo-datos-postgis.md
-│   │   └── ADR-004-monorepo.md
-│   └── api/                   # Documentación de la API (o se autogenera desde el código)
+│   ├── VISION.md
+│   ├── ADR-002-backend-lenguaje.md
+│   ├── ADR-003-modelo-datos-postgis.md
+│   ├── ADR-004-monorepo.md
+│   ├── ADR-005-licencias.md
+│   ├── ADR-006-auth-y-mvp.md
+│   └── api/                   # Contrato del MVP; OpenAPI vive en /docs de la API
 │
 ├── backend/
-│   ├── src/                   # Código de la API (estructura interna depende del lenguaje elegido)
-│   ├── migrations/            # Migraciones versionadas de base de datos
+│   ├── src/
+│   ├── migrations/
 │   ├── tests/
-│   └── README.md              # Cómo levantar y testear SOLO el backend
+│   └── README.md
 │
 ├── apps/
-│   └── flutter/                 # App única: Android, iOS y Web desde la misma base de código
-│       └── README.md
-│
-├── infra/
-│   ├── deploy/                 # Configuración de despliegue (Render/Fly.io, etc.)
-│   └── scripts/                # Scripts de utilidad (seed de datos de prueba, etc.)
+│   └── flutter/               # Android, iOS y web
 │
 └── .github/
-    ├── workflows/               # CI: tests de backend, tests de apps, lint
-    └── ISSUE_TEMPLATE/
+    └── workflows/
 ```
+
+La visión no es un ADR: vive en `docs/VISION.md`. No hay `ADR-001`.
 
 ## Decisión de frontend (Flutter)
 
