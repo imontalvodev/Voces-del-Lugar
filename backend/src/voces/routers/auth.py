@@ -57,8 +57,10 @@ def login(
         text("SELECT id, password_hash FROM users WHERE email = :email"),
         {"email": payload.email.lower()},
     ).mappings().first()
-    if row is None or not verify_password(payload.password, row["password_hash"]):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Email o contraseña incorrectos")
+    if row is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "No hay ninguna cuenta con ese email")
+    if not verify_password(payload.password, row["password_hash"]):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "La contraseña no coincide")
     return TokenOut(access_token=make_token(row["id"], settings))
 
 

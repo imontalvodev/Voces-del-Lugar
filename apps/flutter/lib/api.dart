@@ -30,6 +30,8 @@ class StoryPin {
     required this.narratorName,
     required this.license,
     required this.status,
+    required this.category,
+    required this.placeId,
     required this.placeName,
     required this.point,
     required this.mediaUrls,
@@ -41,6 +43,8 @@ class StoryPin {
   final String? narratorName;
   final String license;
   final String status;
+  final String category;
+  final String placeId;
   final String placeName;
   final LatLng point;
   final List<String> mediaUrls;
@@ -55,6 +59,8 @@ class StoryPin {
       narratorName: json['narrator_name'] as String?,
       license: json['license'] as String,
       status: json['status'] as String,
+      category: json['category'] as String? ?? 'anecdota',
+      placeId: place['id'] as String,
       placeName: place['name'] as String,
       point: LatLng((place['latitude'] as num).toDouble(), (place['longitude'] as num).toDouble()),
       mediaUrls: [
@@ -113,6 +119,18 @@ class VocesApi {
       'north': '$north',
     });
     final response = await http.get(uri);
+    _expect(response);
+    final rows = jsonDecode(response.body) as List<dynamic>;
+    return [for (final row in rows) StoryPin.fromJson(row as Map<String, dynamic>)];
+  }
+
+  Future<List<StoryPin>> archive() => mapStories(-9.5, 35.8, 4.5, 43.9);
+
+  Future<List<StoryPin>> mine() async {
+    final response = await http.get(
+      Uri.parse('$apiBase/api/v1/stories/mine'),
+      headers: {'Authorization': 'Bearer ${account!.token}'},
+    );
     _expect(response);
     final rows = jsonDecode(response.body) as List<dynamic>;
     return [for (final row in rows) StoryPin.fromJson(row as Map<String, dynamic>)];
