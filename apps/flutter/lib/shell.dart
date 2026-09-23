@@ -61,65 +61,80 @@ class _AppShellState extends State<AppShell> {
         },
       ),
     ];
+    final wide = MediaQuery.sizeOf(context).width >= 720;
+    final body = IndexedStack(index: _index, children: pages);
+    final rail = _SideRail(
+      index: _index,
+      vertical: wide,
+      onSelect: (index) => setState(() => _index = index),
+    );
     return Scaffold(
-      backgroundColor: VocesColors.field,
-      body: Column(
-        children: [
-          _Masthead(
-            index: _index,
-            accountName: widget.api.account?.displayName,
-            onSelect: (index) => setState(() => _index = index),
-          ),
-          const Divider(height: 1, color: VocesColors.line),
-          Expanded(child: IndexedStack(index: _index, children: pages)),
-        ],
-      ),
+      backgroundColor: VocesColors.desk,
+      body: wide ? Row(children: [rail, Expanded(child: body)]) : Column(children: [rail, Expanded(child: body)]),
     );
   }
 }
 
-class _Masthead extends StatelessWidget {
-  const _Masthead({required this.index, required this.accountName, required this.onSelect});
+class _SideRail extends StatelessWidget {
+  const _SideRail({required this.index, required this.vertical, required this.onSelect});
 
   final int index;
-  final String? accountName;
+  final bool vertical;
   final ValueChanged<int> onSelect;
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 720;
     final links = [
       (0, 'Inicio'),
       (1, 'Mapa'),
-      (2, accountName ?? 'Cuenta'),
+      (2, 'Cuenta'),
     ];
-    final nav = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final link in links)
-          _NavLink(label: link.$2, selected: index == link.$1, onTap: () => onSelect(link.$1)),
-      ],
-    );
+    final nav = [
+      for (final link in links)
+        _NavLink(label: link.$2, selected: index == link.$1, onTap: () => onSelect(link.$1)),
+    ];
+    if (!vertical) {
+      return Material(
+        color: VocesColors.ink,
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Row(
+              children: [
+                Text('Voces del Lugar', style: vocesDisplay(18, color: VocesColors.inkOnDesk)),
+                const Spacer(),
+                ...nav,
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Material(
-      color: VocesColors.field,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(28, 18, 20, 14),
-        child: wide
-            ? Row(
-                children: [
-                  Text('Voces del Lugar', style: Theme.of(context).textTheme.titleLarge),
-                  const Spacer(),
-                  nav,
-                ],
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Voces del Lugar', style: Theme.of(context).textTheme.titleLarge),
-                  const SizedBox(height: 8),
-                  nav,
-                ],
-              ),
+      color: VocesColors.ink,
+      child: SizedBox(
+        width: 96,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
+              children: [
+                RotatedBox(
+                  quarterTurns: 1,
+                  child: Text(
+                    'Voces del Lugar',
+                    style: vocesDisplay(16, color: VocesColors.inkOnDesk).copyWith(letterSpacing: 0.8),
+                  ),
+                ),
+                const SizedBox(height: 36),
+                ...nav,
+                const Spacer(),
+                Text('40.42°N\n3.70°O', textAlign: TextAlign.center, style: vocesMono(size: 11, color: VocesColors.mutedOnDesk)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -134,17 +149,22 @@ class _NavLink extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 8),
-      child: TextButton(
-        onPressed: onTap,
-        style: TextButton.styleFrom(
-          foregroundColor: selected ? VocesColors.seal : VocesColors.ink,
-          textStyle: const TextStyle(fontSize: 16),
-        ),
-        child: Semantics(
-          selected: selected,
-          child: Text(label, style: TextStyle(decoration: selected ? TextDecoration.underline : null, decorationThickness: 2, decorationColor: VocesColors.seal)),
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          child: Text(
+            label,
+            style: vocesSans(
+              size: 13,
+              weight: FontWeight.w600,
+              color: selected ? VocesColors.inkOnDesk : VocesColors.mutedOnDesk,
+              height: 1.2,
+            ),
+          ),
         ),
       ),
     );

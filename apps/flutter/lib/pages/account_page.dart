@@ -84,88 +84,188 @@ class AccountPageState extends State<AccountPage> {
   @override
   Widget build(BuildContext context) {
     final account = widget.api.account;
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(28, 36, 28, 48),
-          children: [
-            Text(account == null ? 'Entra para dejar una historia' : account.displayName, style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 12),
-            if (account == null) ..._signedOut() else ..._signedIn(account),
-          ],
+    if (account == null) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(28, 36, 28, 48),
+            children: [
+              Text('Entra para dejar una historia', style: vocesDisplay(32, color: VocesColors.inkOnDesk)),
+              const SizedBox(height: 12),
+              ..._signedOut(),
+            ],
+          ),
         ),
-      ),
+      );
+    }
+    final identity = _Identity(account: account, onLogout: _logout);
+    final ledger = _Ledger(
+      stories: _mine,
+      loading: _loadingMine,
+      error: _error,
+      onOpen: (story) {
+        Navigator.push(context, MaterialPageRoute(builder: (_) => StoryPage(story: story)));
+      },
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 860;
+        if (!wide) {
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 40),
+            children: [identity, const SizedBox(height: 24), ledger],
+          );
+        }
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(40, 40, 48, 40),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 280, child: identity),
+              const SizedBox(width: 48),
+              Expanded(child: SingleChildScrollView(child: ledger)),
+            ],
+          ),
+        );
+      },
     );
   }
 
   List<Widget> _signedOut() {
     return [
-      const Text('Hace falta una cuenta para dejar una historia. La primera de una base vacía administra el archivo.'),
-      const SizedBox(height: 16),
-      if (_registering) ...[
-        TextField(controller: _name, decoration: const InputDecoration(labelText: 'Cómo te llamas')),
-        const SizedBox(height: 12),
-      ],
-      TextField(
-        controller: _email,
-        decoration: const InputDecoration(labelText: 'Email'),
-        keyboardType: TextInputType.emailAddress,
-        autofillHints: const [AutofillHints.email],
+      Text(
+        'Hace falta una cuenta para dejar una historia. La primera de una base vacía administra el archivo.',
+        style: vocesSans(size: 16, color: VocesColors.inkOnDesk),
       ),
-      const SizedBox(height: 12),
-      TextField(
-        controller: _password,
-        decoration: InputDecoration(labelText: 'Contraseña', helperText: _registering ? 'Al menos 8 caracteres.' : null, errorText: _error),
-        obscureText: true,
-        autofillHints: _registering ? const [AutofillHints.newPassword] : const [AutofillHints.password],
-        onSubmitted: (_) {
-          if (!_busy) _submit();
-        },
-      ),
-      const SizedBox(height: 16),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: FilledButton(onPressed: _busy ? null : _submit, child: Text(_busy ? 'Espera' : (_registering ? 'Crear cuenta' : 'Entrar'))),
-      ),
-      TextButton(
-        onPressed: () => setState(() => _registering = !_registering),
-        child: Text(_registering ? 'Ya tengo cuenta' : 'No tengo cuenta'),
-      ),
-    ];
-  }
-
-  List<Widget> _signedIn(Account account) {
-    return [
-      Text(account.email, style: const TextStyle(fontSize: 18)),
-      const SizedBox(height: 8),
-      Text(roleLabel(account.role), style: const TextStyle(color: VocesColors.muted, height: 1.4)),
-      const SizedBox(height: 16),
-      Align(alignment: Alignment.centerLeft, child: OutlinedButton(onPressed: _logout, child: const Text('Salir'))),
-      const SizedBox(height: 36),
-      Text('Lo que has dejado', style: Theme.of(context).textTheme.titleLarge),
-      const SizedBox(height: 12),
-      if (_loadingMine)
-        const StoryListStatus(message: 'Cargando tus historias', busy: true)
-      else if (_mine.isEmpty)
-        const StoryListStatus(message: 'Todavía no has dejado ninguna.')
-      else
-        ChronicleList(
-          stories: _mine,
-          showStatus: true,
-          onOpen: (story) {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => StoryPage(story: story)));
-          },
+      const SizedBox(height: 20),
+      Container(
+        color: VocesColors.paper,
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_registering) ...[
+              TextField(controller: _name, decoration: const InputDecoration(labelText: 'Cómo te llamas')),
+              const SizedBox(height: 12),
+            ],
+            TextField(
+              controller: _email,
+              decoration: const InputDecoration(labelText: 'Email'),
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _password,
+              decoration: InputDecoration(labelText: 'Contraseña', helperText: _registering ? 'Al menos 8 caracteres.' : null, errorText: _error),
+              obscureText: true,
+              autofillHints: _registering ? const [AutofillHints.newPassword] : const [AutofillHints.password],
+              onSubmitted: (_) {
+                if (!_busy) _submit();
+              },
+            ),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: _busy ? null : _submit, child: Text(_busy ? 'Espera' : (_registering ? 'Crear cuenta' : 'Entrar'))),
+            TextButton(
+              onPressed: () => setState(() => _registering = !_registering),
+              child: Text(_registering ? 'Ya tengo cuenta' : 'No tengo cuenta'),
+            ),
+          ],
         ),
-      if (_error != null) _errorText(),
+      ),
     ];
   }
+}
 
-  Widget _errorText() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
-      child: Text(_error!, style: const TextStyle(color: VocesColors.seal)),
+class _Identity extends StatelessWidget {
+  const _Identity({required this.account, required this.onLogout});
+
+  final Account account;
+  final VoidCallback onLogout;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(account.displayName, style: vocesDisplay(30, color: VocesColors.inkOnDesk)),
+        const SizedBox(height: 8),
+        Text(account.email, style: vocesSans(size: 14.5, color: VocesColors.inkOnDesk)),
+        const SizedBox(height: 8),
+        Text(roleLabel(account.role), style: vocesSans(size: 13.5, color: VocesColors.mutedOnDesk, height: 1.5)),
+        const SizedBox(height: 20),
+        OutlinedButton(
+          onPressed: onLogout,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: VocesColors.inkOnDesk,
+            side: const BorderSide(color: VocesColors.inkOnDesk, width: 1.5),
+          ),
+          child: const Text('Salir'),
+        ),
+      ],
+    );
+  }
+}
+
+class _Ledger extends StatelessWidget {
+  const _Ledger({required this.stories, required this.loading, required this.error, required this.onOpen});
+
+  final List<StoryPin> stories;
+  final bool loading;
+  final String? error;
+  final ValueChanged<StoryPin> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: VocesColors.paper,
+      padding: const EdgeInsets.fromLTRB(32, 28, 32, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Lo que has dejado', style: vocesDisplay(20)),
+          const SizedBox(height: 8),
+          if (loading)
+            const StoryListStatus(message: 'Cargando tus historias', busy: true)
+          else if (stories.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: StoryListStatus(message: 'Todavía no has dejado ninguna.'),
+            )
+          else
+            for (final story in stories)
+              InkWell(
+                onTap: () => onOpen(story),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: VocesColors.paperLine))),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(story.title, style: vocesDisplay(18)),
+                            const SizedBox(height: 2),
+                            Text(story.placeName, style: vocesSans(size: 12.5)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      StatusStamp(status: story.status),
+                    ],
+                  ),
+                ),
+              ),
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 12),
+              child: Text(error!, style: vocesSans(size: 14, color: VocesColors.crimson)),
+            ),
+        ],
+      ),
     );
   }
 }

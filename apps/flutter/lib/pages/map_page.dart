@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:voces/api.dart';
 import 'package:voces/pages/story_page.dart';
@@ -150,7 +149,7 @@ class MapPageState extends State<MapPage> {
     return Row(
       children: [
         SizedBox(width: 380, child: rail),
-        const VerticalDivider(width: 1, color: VocesColors.line),
+        const VerticalDivider(width: 1, color: Color(0x33F2ECD8)),
         Expanded(child: map),
       ],
     );
@@ -201,34 +200,46 @@ class _MapCanvas extends StatelessWidget {
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'dev.vocesdellugar.voces',
+              tileBuilder: (context, tileWidget, _) {
+                return ColorFiltered(
+                  colorFilter: const ColorFilter.mode(VocesColors.mapGround, BlendMode.color),
+                  child: tileWidget,
+                );
+              },
             ),
             MarkerLayer(
               markers: [
                 for (final story in stories)
                   Marker(
                     point: story.point,
-                    width: 44,
-                    height: 44,
-                    child: IconButton(
-                      tooltip: story.placeName,
-                      onPressed: () => onSelect(story),
-                      icon: Icon(
-                        Icons.place,
-                        color: story.id == selectedId ? VocesColors.ink : VocesColors.seal,
-                        size: story.id == selectedId ? 40 : 32,
-                      ),
-                    ),
+                    width: story.id == selectedId ? 32 : 26,
+                    height: story.id == selectedId ? 32 : 26,
+                    child: _Pin(selected: story.id == selectedId, label: story.placeName, onPressed: () => onSelect(story)),
                   ),
                 if (draft != null)
                   Marker(
                     point: draft!,
-                    width: 48,
-                    height: 48,
-                    child: const Icon(Icons.location_on, color: VocesColors.moss, size: 44),
+                    width: 22,
+                    height: 22,
+                    child: const _DraftPin(),
                   ),
               ],
             ),
           ],
+        ),
+        const Positioned(
+          left: 16,
+          bottom: 20,
+          child: DecoratedBox(
+            decoration: BoxDecoration(color: Color(0xD9123449)),
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Text(
+                '© colaboradores de OpenStreetMap',
+                style: TextStyle(color: VocesColors.mutedOnDesk, fontSize: 11),
+              ),
+            ),
+          ),
         ),
         Positioned(
           right: 16,
@@ -248,6 +259,41 @@ class _MapCanvas extends StatelessWidget {
   }
 }
 
+class _Pin extends StatelessWidget {
+  const _Pin({required this.selected, required this.label, required this.onPressed});
+
+  final bool selected;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: selected ? VocesColors.inkOnDesk : VocesColors.marigold,
+        shape: CircleBorder(side: BorderSide(color: selected ? VocesColors.inkOnDesk : VocesColors.ink, width: 2)),
+        child: InkWell(customBorder: const CircleBorder(), onTap: onPressed, child: const SizedBox.expand()),
+      ),
+    );
+  }
+}
+
+class _DraftPin extends StatelessWidget {
+  const _DraftPin();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: VocesColors.inkOnDesk, width: 2),
+      ),
+    );
+  }
+}
+
 class _MapButton extends StatelessWidget {
   const _MapButton({required this.label, required this.icon, required this.onPressed});
 
@@ -259,8 +305,8 @@ class _MapButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: VocesColors.paper,
-      elevation: 1,
-      child: IconButton(tooltip: label, onPressed: onPressed, icon: Icon(icon, color: VocesColors.ink), constraints: const BoxConstraints(minWidth: 44, minHeight: 44)),
+      shape: const RoundedRectangleBorder(side: BorderSide(color: VocesColors.paperLine)),
+      child: IconButton(tooltip: label, onPressed: onPressed, icon: Icon(icon, color: VocesColors.ink), constraints: const BoxConstraints(minWidth: 40, minHeight: 40)),
     );
   }
 }
@@ -310,13 +356,13 @@ class _StoryRail extends StatelessWidget {
     final categories = {for (final story in stories) story.category}.toList()..sort();
     final selected = visible.where((story) => story.id == selectedId).firstOrNull ?? stories.where((story) => story.id == selectedId).firstOrNull;
     return ColoredBox(
-      color: VocesColors.field,
+      color: VocesColors.desk,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Historias de este mapa', style: Theme.of(context).textTheme.titleLarge),
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+            child: Text('Historias de este mapa', style: vocesDisplay(19, color: VocesColors.inkOnDesk)),
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -347,8 +393,8 @@ class _StoryRail extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
               child: Text(
-                awaitingTap ? 'Pincha el mapa en el sitio exacto de la historia.' : 'Pincha un sitio vacío del mapa para dejar ahí una historia. Pincha un punto rojo para ver las de ese lugar.',
-                style: const TextStyle(color: VocesColors.muted, height: 1.35),
+                awaitingTap ? 'Pincha el mapa en el sitio exacto de la historia.' : 'Pincha un sitio vacío del mapa para dejar ahí una historia. Pincha un sello para ver las historias de ese lugar.',
+                style: vocesSans(size: 13, color: VocesColors.mutedOnDesk, height: 1.5),
               ),
             ),
           if (error != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text(error!)),
@@ -375,7 +421,11 @@ class _StoryRail extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: TextButton(onPressed: () => onRead(selected), child: const Text('Leer la historia')),
+                child: TextButton(
+                  onPressed: () => onRead(selected),
+                  style: TextButton.styleFrom(foregroundColor: VocesColors.marigold),
+                  child: const Text('Leer la historia'),
+                ),
               ),
             ),
         ],
@@ -421,17 +471,13 @@ class _DraftBanner extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Punto marcado', style: GoogleFonts.newsreader(fontSize: 22, color: VocesColors.ink)),
+          Text('Punto marcado', style: vocesDisplay(18)),
           const SizedBox(height: 4),
-          Text('${point.latitude.toStringAsFixed(5)}, ${point.longitude.toStringAsFixed(5)}', style: const TextStyle(color: VocesColors.muted)),
-          const SizedBox(height: 4),
-          const Text('Vuelve a pinchar el mapa si este no es el sitio.'),
+          Text(coordinateLabel(point), style: vocesMono(size: 11.5)),
           const SizedBox(height: 8),
-          FilledButton(
-            onPressed: onWrite,
-            style: FilledButton.styleFrom(backgroundColor: VocesColors.seal, foregroundColor: VocesColors.paper, minimumSize: const Size(44, 44)),
-            child: const Text('Escribir la historia aquí'),
-          ),
+          Text('Vuelve a pinchar el mapa si este no es el sitio.', style: vocesSans(size: 13)),
+          const SizedBox(height: 10),
+          FilledButton(onPressed: onWrite, child: const Text('Escribir la historia aquí')),
         ],
       ),
     );
@@ -448,31 +494,36 @@ class _StoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 2),
       child: Material(
-        color: selected ? VocesColors.paper : VocesColors.field,
+        color: VocesColors.paper,
         child: InkWell(
           onTap: onSelect,
           child: Container(
-            padding: const EdgeInsets.fromLTRB(12, 14, 12, 14),
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
             decoration: BoxDecoration(
               border: Border(
-                left: BorderSide(color: selected ? VocesColors.seal : Colors.transparent, width: 3),
-                top: const BorderSide(color: VocesColors.line),
+                left: BorderSide(color: selected ? VocesColors.marigold : Colors.transparent, width: 4),
+                bottom: const BorderSide(color: VocesColors.paperLine),
               ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(story.placeName, style: const TextStyle(color: VocesColors.moss)),
+                Row(
+                  children: [
+                    Expanded(child: Text(story.placeName, style: vocesSans(size: 12.5, color: VocesColors.cobalt, weight: FontWeight.w700))),
+                    Text(coordinateLabel(story.point), style: vocesMono(size: 10.5)),
+                  ],
+                ),
                 const SizedBox(height: 2),
-                Text(story.title, style: GoogleFonts.newsreader(fontSize: 22, height: 1.15, color: VocesColors.ink)),
-                if (story.narratorName != null) Text('Lo cuenta ${story.narratorName}'),
-                Text(categoryLabel(story.category), style: const TextStyle(color: VocesColors.muted)),
-                if (excerpt(story.body, max: 120).isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(excerpt(story.body, max: 120), maxLines: 3, overflow: TextOverflow.ellipsis),
-                ],
+                Text(story.title, style: vocesDisplay(18)),
+                if (story.narratorName != null) Text('Lo cuenta ${story.narratorName}', style: vocesSans(size: 12)),
+                if (selected)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('En el mapa', style: vocesSans(size: 11.5, color: VocesColors.marigoldDeep, weight: FontWeight.w700)),
+                  ),
               ],
             ),
           ),

@@ -1,11 +1,11 @@
 {
-    "name": "voces",
-    "short_name": "voces",
+    "name": "Voces del Lugar",
+    "short_name": "Voces",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#1F4D3D",
+    "theme_color": "#1F4D3D",
+    "description": "Atlas de voces de un lugar.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
