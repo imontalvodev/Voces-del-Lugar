@@ -13,6 +13,14 @@ const fallbackCenter = LatLng(40.416, -3.703);
 const zoomForDevice = 14.0;
 const zoomForPlace = 13.0;
 
+List<StoryPin> onePinPerPlace(List<StoryPin> stories) {
+  final seen = <String>{};
+  return [
+    for (final story in stories)
+      if (seen.add(story.placeId)) story,
+  ];
+}
+
 class MapPage extends StatefulWidget {
   const MapPage({super.key, required this.api, required this.onLeaveStory, this.locate});
 
@@ -239,7 +247,7 @@ class _MapCanvas extends StatelessWidget {
             ),
             MarkerLayer(
               markers: [
-                for (final story in stories)
+                for (final story in onePinPerPlace(stories))
                   Marker(
                     point: story.point,
                     width: 44,
