@@ -46,16 +46,14 @@ class AccountPageState extends State<AccountPage> {
     setState(() => _loadingMine = true);
     try {
       final stories = await widget.api.mine();
+      if (mounted) setState(() => _mine = stories);
       if (widget.api.account?.canModerate == true) {
-        final queue = await widget.api.reviewQueue();
-        if (mounted) {
-          setState(() {
-            _mine = stories;
-            _queue = queue;
-          });
+        try {
+          final queue = await widget.api.reviewQueue();
+          if (mounted) setState(() => _queue = queue);
+        } on ApiException catch (error) {
+          if (mounted) setState(() => _error = error.message);
         }
-      } else if (mounted) {
-        setState(() => _mine = stories);
       }
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -163,12 +161,20 @@ class AccountPageState extends State<AccountPage> {
         ReviewQueue(
           stories: _queue,
           onPublish: (story) async {
-            await widget.api.publish(story.id);
-            await reload();
+            try {
+              await widget.api.publish(story.id);
+              await reload();
+            } on ApiException catch (error) {
+              if (mounted) setState(() => _error = error.message);
+            }
           },
           onReject: (story) async {
-            await widget.api.reject(story.id);
-            await reload();
+            try {
+              await widget.api.reject(story.id);
+              await reload();
+            } on ApiException catch (error) {
+              if (mounted) setState(() => _error = error.message);
+            }
           },
         ),
         const SizedBox(height: 28),
