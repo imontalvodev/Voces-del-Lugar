@@ -114,7 +114,10 @@ class MapPageState extends State<MapPage> {
       _draft = null;
       _awaitingTap = false;
     });
-    if (_ready) _map.move(story.point, 16);
+    if (_ready) {
+      _mapMoveToken++;
+      _map.move(story.point, 16);
+    }
   }
 
   void _drop(LatLng point) {
@@ -149,9 +152,13 @@ class MapPageState extends State<MapPage> {
       onDrop: _drop,
       onZoom: (delta) {
         final camera = _map.camera;
+        _mapMoveToken++;
         _map.move(camera.center, (camera.zoom + delta).clamp(3, 18));
       },
-      onReset: () => _map.move(fallbackCenter, zoomForPlace),
+      onReset: () {
+        _mapMoveToken++;
+        _map.move(fallbackCenter, zoomForPlace);
+      },
     );
     final rail = _StoryRail(
       stories: _stories,
