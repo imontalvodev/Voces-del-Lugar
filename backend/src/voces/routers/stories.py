@@ -149,6 +149,24 @@ def reject(
     return to_story(fetch_story(session, story_id), media_for(session, [story_id]).get(story_id, []))
 
 
+@router.post("/{story_id}/unpublish", response_model=StoryOut)
+def unpublish(
+    story_id: UUID,
+    user: Annotated[dict, Depends(require_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> StoryOut:
+    _require_moderator(user)
+    row = _require_story(session, story_id)
+    if row["status"] != "published":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Solo se retira una historia publicada")
+    session.execute(
+        text("UPDATE stories SET status = 'pending_review', published_at = NULL WHERE id = :id"),
+        {"id": story_id},
+    )
+    session.commit()
+    return to_story(fetch_story(session, story_id), media_for(session, [story_id]).get(story_id, []))
+
+
 def _require_moderator(user: dict) -> None:
     if user["role"] not in ("curator", "admin"):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo un moderador puede publicar o rechazar")
