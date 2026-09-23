@@ -49,6 +49,26 @@ Fase 1 — MVP: cuenta, historia con texto o audio, consentimiento, moderación 
 
 Ver fases completas en [`docs/VISION.md`](./docs/VISION.md#fases-de-alcance-a-alto-nivel).
 
+## Servir en público
+
+Hace falta un dominio apuntando a la máquina. En el entorno del compose, sin commitearlo:
+
+```bash
+export POSTGRES_PASSWORD='una-clave-larga'
+export JWT_SECRET='otra-clave-de-al-menos-32-caracteres'
+export VOCES_DOMAIN='voces.example'
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Copia de la base y de los audios:
+
+```bash
+docker compose -f docker-compose.prod.yml exec -T db pg_dump -U voces voces > voces.sql
+docker compose -f docker-compose.prod.yml exec -T api tar -C /data -czf - media > voces-media.tgz
+```
+
+La app web se construye con `--dart-define=API_BASE=https://voces.example`.
+
 ## Licencias
 
 El proyecto es open source y gratuito. Razonamiento en [`docs/ADR-005-licencias.md`](./docs/ADR-005-licencias.md).
