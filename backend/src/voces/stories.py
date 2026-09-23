@@ -162,6 +162,21 @@ def fetch_mine(session: Session, author_id: UUID) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def fetch_review(session: Session) -> list[dict]:
+    rows = session.execute(
+        text(
+            f"""
+            SELECT {STORY_COLUMNS}
+            FROM stories s
+            JOIN places p ON p.id = s.place_id
+            WHERE s.status = 'pending_review'
+            ORDER BY s.created_at
+            """
+        )
+    ).mappings()
+    return [dict(row) for row in rows]
+
+
 def media_for(session: Session, story_ids: list[UUID]) -> dict[UUID, list[dict]]:
     if not story_ids:
         return {}

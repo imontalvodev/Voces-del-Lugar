@@ -16,6 +16,7 @@ from voces.stories import (
     fetch_map,
     fetch_mine,
     fetch_nearby,
+    fetch_review,
     fetch_story,
     stories_out,
     to_story,
@@ -58,6 +59,15 @@ def mine(
     session: Annotated[Session, Depends(get_session)],
 ) -> list[StoryOut]:
     return stories_out(session, fetch_mine(session, user["id"]))
+
+
+@router.get("/review", response_model=list[StoryOut])
+def review(
+    user: Annotated[dict, Depends(require_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> list[StoryOut]:
+    _require_moderator(user)
+    return stories_out(session, fetch_review(session))
 
 
 @router.get("/{story_id}", response_model=StoryOut)
