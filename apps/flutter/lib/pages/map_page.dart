@@ -3,17 +3,22 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:voces/api.dart';
+import 'package:voces/locate.dart';
 import 'package:voces/pages/story_page.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/theme.dart';
+import 'package:voces/widgets/place_jump.dart';
 
-const _home = LatLng(40.416, -3.703);
+const fallbackCenter = LatLng(40.416, -3.703);
+const zoomForDevice = 14.0;
+const zoomForPlace = 13.0;
 
 class MapPage extends StatefulWidget {
-  const MapPage({super.key, required this.api, required this.onLeaveStory});
+  const MapPage({super.key, required this.api, required this.onLeaveStory, this.locate});
 
   final VocesApi api;
   final void Function(LatLng point) onLeaveStory;
+  final Future<LatLng?> Function()? locate;
 
   @override
   State<MapPage> createState() => MapPageState();
@@ -80,6 +85,17 @@ class MapPageState extends State<MapPage> {
     }
   }
 
+  Future<void> _centerOnUser() async {
+    final point = await (widget.locate ?? deviceLocation)();
+    if (!mounted || point == null || !_ready) return;
+    _map.move(point, zoomForDevice);
+  }
+
+  void _goToPlace(PlaceHit hit) {
+    if (!_ready) return;
+    _map.move(LatLng(hit.latitude, hit.longitude), zoomForPlace);
+  }
+
   void _select(StoryPin story) {
     setState(() {
       _selectedId = story.id;
@@ -115,6 +131,7 @@ class MapPageState extends State<MapPage> {
       onReady: () {
         _ready = true;
         reload();
+        _centerOnUser();
       },
       onMoveEnd: reload,
       onSelect: _select,
@@ -123,7 +140,7 @@ class MapPageState extends State<MapPage> {
         final camera = _map.camera;
         _map.move(camera.center, (camera.zoom + delta).clamp(3, 18));
       },
-      onReset: () => _map.move(_home, 13),
+      onReset: () => _map.move(fallbackCenter, zoomForPlace),
     );
     final rail = _StoryRail(
       stories: _stories,
@@ -136,6 +153,8 @@ class MapPageState extends State<MapPage> {
       draft: _draft,
       awaitingTap: _awaitingTap,
       error: _error,
+      searchPlaces: widget.api.searchPlaces,
+      onGoToPlace: _goToPlace,
       onQuery: () => setState(() {}),
       onNarrator: (value) => setState(() => _narrator = value),
       onCategory: (value) => setState(() => _category = value),
@@ -189,8 +208,8 @@ class _MapCanvas extends StatelessWidget {
         FlutterMap(
           mapController: controller,
           options: MapOptions(
-            initialCenter: _home,
-            initialZoom: 13,
+            initialCenter: fallbackCenter,
+            initialZoom: zoomForPlace,
             onMapReady: onReady,
             onTap: (_, point) => onDrop(point),
             onMapEvent: (event) {
@@ -277,6 +296,8 @@ class _StoryRail extends StatelessWidget {
     required this.draft,
     required this.awaitingTap,
     required this.error,
+    required this.searchPlaces,
+    required this.onGoToPlace,
     required this.onQuery,
     required this.onNarrator,
     required this.onCategory,
@@ -296,6 +317,8 @@ class _StoryRail extends StatelessWidget {
   final LatLng? draft;
   final bool awaitingTap;
   final String? error;
+  final Future<List<PlaceHit>> Function(String query) searchPlaces;
+  final ValueChanged<PlaceHit> onGoToPlace;
   final VoidCallback onQuery;
   final ValueChanged<String?> onNarrator;
   final ValueChanged<String?> onCategory;
@@ -320,10 +343,17 @@ class _StoryRail extends StatelessWidget {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: TextField(
-              controller: query,
-              onChanged: (_) => onQuery(),
-              decoration: const InputDecoration(labelText: 'Buscar', isDense: true),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PlaceJump(search: searchPlaces, onPick: onGoToPlace),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: query,
+                  onChanged: (_) => onQuery(),
+                  decoration: const InputDecoration(labelText: 'Buscar', isDense: true),
+                ),
+              ],
             ),
           ),
           Padding(
