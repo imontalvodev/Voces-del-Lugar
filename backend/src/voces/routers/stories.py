@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from voces.db import get_session
 from voces.deps import optional_user_id, require_user
 from voces.deps import load_user
-from voces.schemas import StoryIn, StoryOut
+from voces.schemas import StoryIn, StoryOut, StoryPatch
 from voces.stories import (
     assert_publishable,
     can_read,
@@ -20,6 +20,7 @@ from voces.stories import (
     fetch_story,
     stories_out,
     to_story,
+    update_story,
     media_for,
 )
 
@@ -94,6 +95,17 @@ def create(
     story_id = create_story(session, user["id"], payload)
     row = fetch_story(session, story_id)
     return to_story(row, [])
+
+
+@router.patch("/{story_id}", response_model=StoryOut)
+def update(
+    story_id: UUID,
+    payload: StoryPatch,
+    user: Annotated[dict, Depends(require_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> StoryOut:
+    update_story(session, story_id, user["id"], payload)
+    return to_story(fetch_story(session, story_id), media_for(session, [story_id]).get(story_id, []))
 
 
 @router.post("/{story_id}/publish", response_model=StoryOut)

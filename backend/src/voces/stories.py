@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Session
 
-from voces.schemas import CATEGORIES, LICENSES, StoryIn, StoryOut
+from voces.schemas import CATEGORIES, LICENSES, StoryIn, StoryOut, StoryPatch
 
 STORY_COLUMNS = """
     s.id, s.title, s.body, s.transcript, s.narrator_name, s.narrator_relation,
@@ -160,6 +160,25 @@ def fetch_mine(session: Session, author_id: UUID) -> list[dict]:
         {"author_id": author_id},
     ).mappings()
     return [dict(row) for row in rows]
+
+
+def update_story(session: Session, story_id: UUID, author_id: UUID, patch: StoryPatch) -> None:
+    row = fetch_story(session, story_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No está esa historia")
+    if row["author_id"] != author_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo quien la escribió puede corregirla")
+    if row["status"] != "pending_review":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Solo se corrige una historia en revisión")
+    changes = patch.model_dump(exclude_unset=True)
+    if not changes:
+        return
+    assignments = ", ".join(f"{column} = :{column}" for column in changes)
+    session.execute(
+        text(f"UPDATE stories SET {assignments} WHERE id = :id"),
+        {**changes, "id": story_id},
+    )
+    session.commit()
 
 
 def fetch_review(session: Session) -> list[dict]:
