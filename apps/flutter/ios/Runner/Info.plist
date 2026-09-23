@@ -8,6 +8,8 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Voces</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Para abrir el mapa donde estás y enseñarte las historias de alrededor.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
