@@ -35,27 +35,46 @@ def validate_story(payload: StoryIn) -> None:
 def create_story(session: Session, author_id: UUID, payload: StoryIn) -> UUID:
     validate_story(payload)
     place = payload.place
-    place_id = session.execute(
+    existing = session.execute(
         text(
             """
-            INSERT INTO places (name, place_type, description, location, created_by)
-            VALUES (
-                :name, :place_type, :description,
-                ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
-                :created_by
-            )
-            RETURNING id
+            SELECT id
+            FROM places
+            WHERE lower(btrim(name)) = lower(btrim(:name))
+              AND ST_DWithin(
+                    location,
+                    ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+                    30
+                  )
+            LIMIT 1
             """
         ),
-        {
-            "name": place.name,
-            "place_type": place.place_type,
-            "description": place.description,
-            "lng": place.longitude,
-            "lat": place.latitude,
-            "created_by": author_id,
-        },
-    ).scalar_one()
+        {"name": place.name, "lng": place.longitude, "lat": place.latitude},
+    ).scalar()
+    if existing is not None:
+        place_id = existing
+    else:
+        place_id = session.execute(
+            text(
+                """
+                INSERT INTO places (name, place_type, description, location, created_by)
+                VALUES (
+                    :name, :place_type, :description,
+                    ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+                    :created_by
+                )
+                RETURNING id
+                """
+            ),
+            {
+                "name": place.name.strip(),
+                "place_type": place.place_type,
+                "description": place.description,
+                "lng": place.longitude,
+                "lat": place.latitude,
+                "created_by": author_id,
+            },
+        ).scalar_one()
     story_id = session.execute(
         text(
             """
