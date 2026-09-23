@@ -33,6 +33,7 @@ apps/flutter/android/.gradle/
 **/Pods/
 
 # Editores y sistema
+.worktrees/
 .idea/
 *.iml
 .DS_Store
