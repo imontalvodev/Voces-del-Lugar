@@ -44,6 +44,7 @@ class AccountPageState extends State<AccountPage> {
   Future<void> reload() async {
     if (widget.api.account == null) return;
     setState(() => _loadingMine = true);
+    var ok = true;
     try {
       final stories = await widget.api.mine();
       if (mounted) setState(() => _mine = stories);
@@ -52,13 +53,25 @@ class AccountPageState extends State<AccountPage> {
           final queue = await widget.api.reviewQueue();
           if (mounted) setState(() => _queue = queue);
         } on ApiException catch (error) {
-          if (mounted) setState(() => _error = error.message);
+          ok = false;
+          if (mounted) {
+            setState(() {
+              _error = error.message;
+              _queue = [];
+            });
+          }
         }
       }
     } on ApiException catch (error) {
+      ok = false;
       if (mounted) setState(() => _error = error.message);
     } finally {
-      if (mounted) setState(() => _loadingMine = false);
+      if (mounted) {
+        setState(() {
+          _loadingMine = false;
+          if (ok) _error = null;
+        });
+      }
     }
   }
 
@@ -197,9 +210,19 @@ class AccountPageState extends State<AccountPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => StoryPage(
+                      builder: (storyContext) => StoryPage(
                         story: opened,
-                        onUnpublish: account.canModerate ? () => widget.api.unpublish(opened.id) : null,
+                        onUnpublish: account.canModerate
+                            ? () async {
+                                try {
+                                  await widget.api.unpublish(opened.id);
+                                  if (storyContext.mounted) Navigator.pop(storyContext);
+                                  await reload();
+                                } on ApiException catch (error) {
+                                  if (mounted) setState(() => _error = error.message);
+                                }
+                              }
+                            : null,
                       ),
                     ),
                   );
@@ -233,11 +256,19 @@ class AccountPageState extends State<AccountPage> {
                       ),
                     );
                     if (save == true) {
-                      await widget.api.updateStory(story.id, title: title.text.trim(), body: body.text.trim());
-                      await reload();
+                      try {
+                        await widget.api.updateStory(story.id, title: title.text.trim(), body: body.text.trim());
+                        await reload();
+                      } on ApiException catch (error) {
+                        if (mounted) setState(() => _error = error.message);
+                      } finally {
+                        title.dispose();
+                        body.dispose();
+                      }
+                    } else {
+                      title.dispose();
+                      body.dispose();
                     }
-                    title.dispose();
-                    body.dispose();
                   },
                   child: const Text('Corregir'),
                 ),

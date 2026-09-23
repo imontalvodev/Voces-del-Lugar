@@ -13,11 +13,12 @@ Future<void> _playWithSpeaker(String url) => _speaker.play(UrlSource(url));
 Future<void> _stopSpeaker() => _speaker.stop();
 
 class StoryPage extends StatelessWidget {
-  const StoryPage({super.key, required this.story, this.play, this.stop, this.onUnpublish});
+  const StoryPage({super.key, required this.story, this.play, this.stop, this.completed, this.onUnpublish});
 
   final StoryPin story;
   final Future<void> Function(String url)? play;
   final Future<void> Function()? stop;
+  final Stream<void>? completed;
   final Future<void> Function()? onUnpublish;
 
   @override
@@ -51,6 +52,7 @@ class StoryPage extends StatelessWidget {
                   url: story.mediaUrls.first,
                   play: play ?? _playWithSpeaker,
                   stop: stop ?? _stopSpeaker,
+                  completed: completed ?? _speaker.onPlayerComplete,
                 ),
               ],
               const SizedBox(height: 36),

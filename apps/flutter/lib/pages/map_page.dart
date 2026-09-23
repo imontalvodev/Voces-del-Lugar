@@ -129,6 +129,7 @@ class MapPageState extends State<MapPage> {
   }
 
   void _drop(LatLng point) {
+    _mapMoveToken++;
     setState(() {
       _draft = point;
       _awaitingTap = false;
