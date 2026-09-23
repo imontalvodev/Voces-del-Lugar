@@ -232,3 +232,18 @@ def test_retirar_esconde_la_historia_del_mapa(client: TestClient):
 
     on_map = client.get("/api/v1/stories/map", params={"west": -4, "south": 40, "east": -3, "north": 41})
     assert on_map.json() == []
+
+
+def test_el_mismo_sitio_no_crea_otro_lugar(client: TestClient):
+    token = _register(client, "ana@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+    first = client.post("/api/v1/stories", json=_story("La fuente"), headers=headers)
+    second_payload = _story("El cántaro")
+    second_payload["place"]["name"] = "  esquina de la plaza "
+    second = client.post("/api/v1/stories", json=second_payload, headers=headers)
+    assert first.json()["place"]["id"] == second.json()["place"]["id"]
+
+    other = _story("Otra esquina")
+    other["place"]["name"] = "El lavadero"
+    third = client.post("/api/v1/stories", json=other, headers=headers)
+    assert third.json()["place"]["id"] != first.json()["place"]["id"]
