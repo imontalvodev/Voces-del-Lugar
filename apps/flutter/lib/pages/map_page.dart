@@ -36,6 +36,7 @@ class MapPageState extends State<MapPage> {
   String? _error;
   bool _ready = false;
   bool _awaitingTap = false;
+  int _mapMoveToken = 0;
 
   @override
   void dispose() {
@@ -86,14 +87,24 @@ class MapPageState extends State<MapPage> {
   }
 
   Future<void> _centerOnUser() async {
+    final token = _mapMoveToken;
     final point = await (widget.locate ?? deviceLocation)();
     if (!mounted || point == null || !_ready) return;
+    if (token != _mapMoveToken) return;
     _map.move(point, zoomForDevice);
   }
 
   void _goToPlace(PlaceHit hit) {
     if (!_ready) return;
+    _mapMoveToken++;
     _map.move(LatLng(hit.latitude, hit.longitude), zoomForPlace);
+  }
+
+  void _onMapEvent(MapEvent event) {
+    if (event.source != MapEventSource.mapController && (event is MapEventWithMove || event is MapEventMoveStart)) {
+      _mapMoveToken++;
+    }
+    if (event is MapEventMoveEnd) reload();
   }
 
   void _select(StoryPin story) {
@@ -133,7 +144,7 @@ class MapPageState extends State<MapPage> {
         reload();
         _centerOnUser();
       },
-      onMoveEnd: reload,
+      onMapEvent: _onMapEvent,
       onSelect: _select,
       onDrop: _drop,
       onZoom: (delta) {
@@ -183,7 +194,7 @@ class _MapCanvas extends StatelessWidget {
     required this.selectedId,
     required this.draft,
     required this.onReady,
-    required this.onMoveEnd,
+    required this.onMapEvent,
     required this.onSelect,
     required this.onDrop,
     required this.onZoom,
@@ -195,7 +206,7 @@ class _MapCanvas extends StatelessWidget {
   final String? selectedId;
   final LatLng? draft;
   final VoidCallback onReady;
-  final VoidCallback onMoveEnd;
+  final ValueChanged<MapEvent> onMapEvent;
   final ValueChanged<StoryPin> onSelect;
   final ValueChanged<LatLng> onDrop;
   final ValueChanged<double> onZoom;
@@ -212,9 +223,7 @@ class _MapCanvas extends StatelessWidget {
             initialZoom: zoomForPlace,
             onMapReady: onReady,
             onTap: (_, point) => onDrop(point),
-            onMapEvent: (event) {
-              if (event is MapEventMoveEnd) onMoveEnd();
-            },
+            onMapEvent: onMapEvent,
           ),
           children: [
             TileLayer(
