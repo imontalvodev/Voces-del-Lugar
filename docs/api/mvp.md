@@ -14,6 +14,7 @@ Base: `/api/v1`. Esquema interactivo: `/docs` cuando la API está en marcha.
 | GET | `/stories/review` | `curator` o `admin` | Historias `pending_review`, de la más antigua a la más nueva. |
 | GET | `/stories/{id}` | cualquiera si está publicada; si no, solo su autor o un moderador | Detalle, lugar, media y licencia. |
 | POST | `/stories` | cuenta | Crea lugar y historia en `pending_review`. `narrator_consent` tiene que ser `true`. |
+| PATCH | `/stories/{id}` | autor, solo en `pending_review` | Corrige título, texto, nombre y parentesco. |
 | POST | `/stories/{id}/audio` | autor | Adjunta un audio (`multipart`, campo `file`). |
 | POST | `/stories/{id}/publish` | `curator` o `admin` | Publica si hay texto o audio. |
 | POST | `/stories/{id}/reject` | `curator` o `admin` | Marca `rejected`. |

@@ -184,3 +184,28 @@ def test_solo_un_moderador_lista_la_revision(client: TestClient):
     assert queue.status_code == 200
     assert [item["title"] for item in queue.json()] == ["En cola"]
     assert queue.json()[0]["status"] == "pending_review"
+
+
+def test_el_autor_corrige_solo_mientras_esta_en_revision(client: TestClient):
+    token = _register(client, "ana@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+    created = client.post("/api/v1/stories", json=_story(), headers=headers)
+    story_id = created.json()["id"]
+
+    patched = client.patch(
+        f"/api/v1/stories/{story_id}",
+        json={"title": "La fuente", "body": "Iban a por agua."},
+        headers=headers,
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["title"] == "La fuente"
+    assert patched.json()["body"] == "Iban a por agua."
+
+    client.post(f"/api/v1/stories/{story_id}/publish", headers=headers)
+    locked = client.patch(
+        f"/api/v1/stories/{story_id}",
+        json={"title": "Otro"},
+        headers=headers,
+    )
+    assert locked.status_code == 409
+    assert locked.json()["detail"] == "Solo se corrige una historia en revisión"
