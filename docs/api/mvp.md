@@ -11,6 +11,7 @@ Base: `/api/v1`. Esquema interactivo: `/docs` cuando la API está en marcha.
 | GET | `/stories/nearby?lat&lng&radius_m` | cualquiera | Historias `published` a menos de `radius_m` metros (máximo 50000). |
 | GET | `/geocode?q=` | cualquiera | Hasta 5 lugares (nombre, latitud, longitud) para centrar el mapa. `q` tiene al menos 2 letras. |
 | GET | `/stories/mine` | cuenta | Historias de quien llama, en cualquier estado. |
+| GET | `/stories/review` | `curator` o `admin` | Historias `pending_review`, de la más antigua a la más nueva. |
 | GET | `/stories/{id}` | cualquiera si está publicada; si no, solo su autor o un moderador | Detalle, lugar, media y licencia. |
 | POST | `/stories` | cuenta | Crea lugar y historia en `pending_review`. `narrator_consent` tiene que ser `true`. |
 | POST | `/stories/{id}/audio` | autor | Adjunta un audio (`multipart`, campo `file`). |
