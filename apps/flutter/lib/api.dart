@@ -160,6 +160,16 @@ class VocesApi {
     return [for (final row in rows) StoryPin.fromJson(row as Map<String, dynamic>)];
   }
 
+  Future<List<StoryPin>> reviewQueue() async {
+    final response = await http.get(
+      Uri.parse('$apiBase/api/v1/stories/review'),
+      headers: {'Authorization': 'Bearer ${account!.token}'},
+    );
+    _expect(response);
+    final rows = jsonDecode(response.body) as List<dynamic>;
+    return [for (final row in rows) StoryPin.fromJson(row as Map<String, dynamic>)];
+  }
+
   Future<StoryPin> createStory({
     required String title,
     required String body,
@@ -206,6 +216,14 @@ class VocesApi {
   Future<void> publish(String storyId) async {
     final response = await http.post(
       Uri.parse('$apiBase/api/v1/stories/$storyId/publish'),
+      headers: {'Authorization': 'Bearer ${account!.token}'},
+    );
+    _expect(response);
+  }
+
+  Future<void> reject(String id) async {
+    final response = await http.post(
+      Uri.parse('$apiBase/api/v1/stories/$id/reject'),
       headers: {'Authorization': 'Bearer ${account!.token}'},
     );
     _expect(response);

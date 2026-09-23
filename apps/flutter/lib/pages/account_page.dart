@@ -3,6 +3,7 @@ import 'package:voces/api.dart';
 import 'package:voces/pages/story_page.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/theme.dart';
+import 'package:voces/widgets/review_queue.dart';
 import 'package:voces/widgets/story_list.dart';
 
 class AccountPage extends StatefulWidget {
@@ -23,6 +24,7 @@ class AccountPageState extends State<AccountPage> {
   bool _busy = false;
   String? _error;
   List<StoryPin> _mine = [];
+  List<StoryPin> _queue = [];
   bool _loadingMine = false;
 
   @override
@@ -44,7 +46,17 @@ class AccountPageState extends State<AccountPage> {
     setState(() => _loadingMine = true);
     try {
       final stories = await widget.api.mine();
-      if (mounted) setState(() => _mine = stories);
+      if (widget.api.account?.canModerate == true) {
+        final queue = await widget.api.reviewQueue();
+        if (mounted) {
+          setState(() {
+            _mine = stories;
+            _queue = queue;
+          });
+        }
+      } else if (mounted) {
+        setState(() => _mine = stories);
+      }
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } finally {
@@ -77,6 +89,7 @@ class AccountPageState extends State<AccountPage> {
     widget.onChanged();
     setState(() {
       _mine = [];
+      _queue = [];
       _error = null;
     });
   }
@@ -144,6 +157,22 @@ class AccountPageState extends State<AccountPage> {
       const SizedBox(height: 16),
       Align(alignment: Alignment.centerLeft, child: OutlinedButton(onPressed: _logout, child: const Text('Salir'))),
       const SizedBox(height: 36),
+      if (account.canModerate) ...[
+        Text('En revisión', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 12),
+        ReviewQueue(
+          stories: _queue,
+          onPublish: (story) async {
+            await widget.api.publish(story.id);
+            await reload();
+          },
+          onReject: (story) async {
+            await widget.api.reject(story.id);
+            await reload();
+          },
+        ),
+        const SizedBox(height: 28),
+      ],
       Text('Lo que has dejado', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 12),
       if (_loadingMine)
