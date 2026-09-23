@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from voces.routers import auth, media, stories
+from voces.routers import auth, geocode, media, stories
 
 app = FastAPI(title="Voces del Lugar", version="0.1.0")
 app.add_middleware(
@@ -12,6 +12,7 @@ app.add_middleware(
 )
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(stories.router, prefix="/api/v1")
+app.include_router(geocode.router, prefix="/api/v1")
 app.include_router(media.router, prefix="/api/v1")
 
 

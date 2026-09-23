@@ -9,6 +9,7 @@ Base: `/api/v1`. Esquema interactivo: `/docs` cuando la API está en marcha.
 | GET | `/auth/me` | cuenta | Perfil y rol. |
 | GET | `/stories/map?west&south&east&north` | cualquiera | Historias `published` dentro del recuadro. |
 | GET | `/stories/nearby?lat&lng&radius_m` | cualquiera | Historias `published` a menos de `radius_m` metros (máximo 50000). |
+| GET | `/geocode?q=` | cualquiera | Hasta 5 lugares (nombre, latitud, longitud) para centrar el mapa. `q` tiene al menos 2 letras. |
 | GET | `/stories/mine` | cuenta | Historias de quien llama, en cualquier estado. |
 | GET | `/stories/{id}` | cualquiera si está publicada; si no, solo su autor o un moderador | Detalle, lugar, media y licencia. |
 | POST | `/stories` | cuenta | Crea lugar y historia en `pending_review`. `narrator_consent` tiene que ser `true`. |
