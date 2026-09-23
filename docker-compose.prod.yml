@@ -1,0 +1,48 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: voces
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: voces
+    volumes:
+      - voces_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U voces -d voces"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./backend
+    environment:
+      VOCES_ENV: production
+      DATABASE_URL: postgresql+psycopg://voces:${POSTGRES_PASSWORD}@db/voces
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGINS: https://${VOCES_DOMAIN}
+      MEDIA_ROOT: /data/media
+    volumes:
+      - voces_media:/data/media
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      VOCES_DOMAIN: ${VOCES_DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  voces_pg:
+  voces_media:
+  caddy_data:
+  caddy_config:
