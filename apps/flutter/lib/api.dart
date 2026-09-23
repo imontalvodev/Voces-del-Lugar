@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -63,11 +64,24 @@ class StoryPin {
       placeId: place['id'] as String,
       placeName: place['name'] as String,
       point: LatLng((place['latitude'] as num).toDouble(), (place['longitude'] as num).toDouble()),
-      mediaUrls: [
-        for (final item in media) '$apiBase${(item as Map<String, dynamic>)['url']}',
-      ],
+      mediaUrls: [for (final item in media) '$apiBase${(item as Map<String, dynamic>)['url']}'],
     );
   }
+}
+
+/// El backend solo acepta audio si el tipo viene declarado; sin esto el
+/// fichero llega como application/octet-stream y lo rechaza.
+MediaType audioType(String filename) {
+  final extension = filename.split('.').last.toLowerCase();
+  return switch (extension) {
+    'mp3' => MediaType('audio', 'mpeg'),
+    'm4a' || 'mp4' => MediaType('audio', 'mp4'),
+    'aac' => MediaType('audio', 'aac'),
+    'wav' => MediaType('audio', 'wav'),
+    'webm' => MediaType('audio', 'webm'),
+    'ogg' || 'opus' => MediaType('audio', 'ogg'),
+    _ => MediaType('application', 'octet-stream'),
+  };
 }
 
 class VocesApi {
@@ -112,12 +126,8 @@ class VocesApi {
   }
 
   Future<List<StoryPin>> mapStories(double west, double south, double east, double north) async {
-    final uri = Uri.parse('$apiBase/api/v1/stories/map').replace(queryParameters: {
-      'west': '$west',
-      'south': '$south',
-      'east': '$east',
-      'north': '$north',
-    });
+    final uri = Uri.parse('$apiBase/api/v1/stories/map')
+        .replace(queryParameters: {'west': '$west', 'south': '$south', 'east': '$east', 'north': '$north'});
     final response = await http.get(uri);
     _expect(response);
     final rows = jsonDecode(response.body) as List<dynamic>;
@@ -127,10 +137,7 @@ class VocesApi {
   Future<List<StoryPin>> archive() => mapStories(-9.5, 35.8, 4.5, 43.9);
 
   Future<List<StoryPin>> mine() async {
-    final response = await http.get(
-      Uri.parse('$apiBase/api/v1/stories/mine'),
-      headers: {'Authorization': 'Bearer ${account!.token}'},
-    );
+    final response = await http.get(Uri.parse('$apiBase/api/v1/stories/mine'), headers: {'Authorization': 'Bearer ${account!.token}'});
     _expect(response);
     final rows = jsonDecode(response.body) as List<dynamic>;
     return [for (final row in rows) StoryPin.fromJson(row as Map<String, dynamic>)];
@@ -158,12 +165,7 @@ class VocesApi {
         'narrator_deceased': deceased,
         'license': license,
         'category': 'anecdota',
-        'place': {
-          'name': placeName,
-          'place_type': 'otro',
-          'latitude': point.latitude,
-          'longitude': point.longitude,
-        },
+        'place': {'name': placeName, 'place_type': 'otro', 'latitude': point.latitude, 'longitude': point.longitude},
       }),
     );
     _expect(response);
@@ -173,7 +175,7 @@ class VocesApi {
   Future<void> uploadAudio(String storyId, String filename, List<int> bytes) async {
     final request = http.MultipartRequest('POST', Uri.parse('$apiBase/api/v1/stories/$storyId/audio'));
     request.headers['Authorization'] = 'Bearer ${account!.token}';
-    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename, contentType: audioType(filename)));
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
     _expect(response);
@@ -187,24 +189,13 @@ class VocesApi {
     _expect(response);
   }
 
-  Map<String, String> get _jsonAuth => {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${account!.token}',
-      };
+  Map<String, String> get _jsonAuth => {'Content-Type': 'application/json', 'Authorization': 'Bearer ${account!.token}'};
 
   Future<void> _keep(String email, String token) async {
-    final me = await http.get(
-      Uri.parse('$apiBase/api/v1/auth/me'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+    final me = await http.get(Uri.parse('$apiBase/api/v1/auth/me'), headers: {'Authorization': 'Bearer $token'});
     _expect(me);
     final body = jsonDecode(me.body) as Map<String, dynamic>;
-    account = Account(
-      token: token,
-      displayName: body['display_name'] as String,
-      role: body['role'] as String,
-      email: email,
-    );
+    account = Account(token: token, displayName: body['display_name'] as String, role: body['role'] as String, email: email);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('token', token);
     await prefs.setString('display_name', account!.displayName);

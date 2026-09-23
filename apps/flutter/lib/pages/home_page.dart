@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
 import 'package:voces/pages/story_page.dart';
 import 'package:voces/story_format.dart';
-import 'package:voces/theme.dart';
-import 'package:voces/widgets/story_list.dart';
+import 'package:voces/ui/kit.dart';
+import 'package:voces/ui/story_card.dart';
+import 'package:voces/ui/tokens.dart';
+import 'package:voces/ui/voice_terrain.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.api, required this.onLeaveStory});
+  const HomePage({super.key, required this.api, required this.onLeaveStory, required this.onOpenMap});
 
   final VocesApi api;
   final VoidCallback onLeaveStory;
+  final VoidCallback onOpenMap;
 
   @override
   State<HomePage> createState() => HomePageState();
@@ -34,180 +39,249 @@ class HomePageState extends State<HomePage> {
     });
     try {
       final stories = await widget.api.archive();
-      if (!mounted) return;
-      setState(() => _stories = stories);
+      if (mounted) setState(() => _stories = stories);
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'No hay conexión con el archivo.');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
 
-  void _open(StoryPin story) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => StoryPage(story: story)));
-  }
-
-  List<StoryPin> get _filtered {
-    if (_category == null) return _stories;
-    return [for (final story in _stories) if (story.category == _category) story];
+  void _openById(String id) {
+    final story = _stories.where((s) => s.id == id).firstOrNull;
+    if (story == null) return;
+    Navigator.push(context, MaterialPageRoute<void>(builder: (_) => StoryPage(story: story)));
   }
 
   @override
   Widget build(BuildContext context) {
-    final stories = _filtered;
-    final lead = stories.isEmpty ? null : stories.first;
-    final rest = stories.length > 1 ? stories.skip(1).toList() : const <StoryPin>[];
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(40, 36, 40, 48),
-      children: [
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: ColoredBox(color: VocesColors.marigold, child: SizedBox(width: 64, height: 6)),
-        ),
-        const SizedBox(height: 20),
-        if (_loading)
-          const StoryListStatus(message: 'Cargando historias', busy: true, onDesk: true)
-        else if (_error != null)
-          StoryListStatus(message: _error!, onRetry: reload, onDesk: true)
-        else if (lead == null) ...[
-          Text(
-            _category == null ? 'Todavía no hay historias publicadas.' : 'No hay historias de este tipo.',
-            style: vocesDisplay(32, color: VocesColors.inkOnDesk),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'La primera puede ser la de una calle, una plaza o un pueblo que conozcas de cerca.',
-            style: vocesSans(size: 16, color: VocesColors.inkOnDesk),
-          ),
-          const SizedBox(height: 20),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: FilledButton(onPressed: widget.onLeaveStory, child: const Text('Dejar una historia aquí')),
-          ),
-        ] else ...[
-          _LeadCard(story: lead, onRead: () => _open(lead), onLeave: widget.onLeaveStory),
-          const SizedBox(height: 30),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text('Catálogo', style: vocesDisplay(22, color: VocesColors.inkOnDesk)),
-              const Spacer(),
-              Text(
-                '${_stories.length} ${_stories.length == 1 ? 'historia publicada' : 'historias publicadas'}',
-                style: vocesMono(size: 13, color: VocesColors.mutedOnDesk),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 8,
-            children: [
-              for (final category in const ['anecdota', 'leyenda', 'oficio', 'tradicion', 'evento'])
-                _CategoryChip(
-                  label: categoryLabel(category),
-                  selected: _category == category,
-                  onTap: () => setState(() => _category = _category == category ? null : category),
+    final size = MediaQuery.sizeOf(context);
+    final narrow = size.width < 720;
+    final pad = narrow ? 22.0 : 56.0;
+    final filtered = _category == null
+        ? _stories
+        : [
+            for (final s in _stories)
+              if (s.category == _category) s,
+          ];
+    final categories = {for (final s in _stories) s.category}.toList()..sort();
+    final beacons = beaconsFromPoints([
+      for (final s in _stories) (id: s.id, lat: s.point.latitude, lon: s.point.longitude, label: '${s.title}\n${s.placeName}'),
+    ]);
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: (size.height * 0.92).clamp(560.0, 980.0),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: VoiceTerrain(beacons: beacons, onBeacon: _openById, horizon: narrow ? 0.7 : 0.5),
                 ),
+                Positioned(
+                  left: pad,
+                  right: pad,
+                  top: 0,
+                  child: SafeArea(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: narrow ? 28 : 56),
+                      child: _Hero(narrow: narrow, onLeaveStory: widget.onLeaveStory, onOpenMap: widget.onOpenMap),
+                    ),
+                  ),
+                ),
+                if (beacons.isNotEmpty)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: narrow ? 118 : 110,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Glass(
+                          radius: 999,
+                          tint: Palette.glassStrong.withValues(alpha: 0.6),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Text(
+                            beacons.length == 1
+                                ? 'La luz es una historia. Tócala para abrirla.'
+                                : 'Cada luz es una de las ${beacons.length} historias. Toca una para abrirla.',
+                            textAlign: TextAlign.center,
+                            style: text(size: 13.5, color: Palette.bone.withValues(alpha: 0.85)),
+                          ),
+                        ),
+                      ).animate().fadeIn(delay: 1800.ms, duration: 800.ms),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        DecoratedSliver(
+          decoration: const BoxDecoration(color: Palette.deep),
+          sliver: SliverMainAxisGroup(
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Lo último que se ha contado', style: display(narrow ? 36 : 48)),
+                      const SizedBox(height: 8),
+                      Text(
+                        _loading
+                            ? 'Buscando en el archivo…'
+                            : '${_stories.length} ${_stories.length == 1 ? 'historia publicada' : 'historias publicadas'}',
+                        style: text(size: 15, color: Palette.haze),
+                      ),
+                      if (categories.length > 1) ...[
+                        const SizedBox(height: 20),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          clipBehavior: Clip.none,
+                          child: Row(
+                            children: [
+                              FilterPill(label: 'Todas', selected: _category == null, onTap: () => setState(() => _category = null)),
+                              for (final c in categories) ...[
+                                const SizedBox(width: 8),
+                                FilterPill(
+                                  label: categoryLabel(c),
+                                  selected: _category == c,
+                                  onTap: () => setState(() => _category = _category == c ? null : c),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 28),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPadding(padding: EdgeInsets.fromLTRB(pad, 0, pad, 140), sliver: _body(filtered)),
             ],
           ),
-          if (rest.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final columns = constraints.maxWidth >= 980 ? 3 : (constraints.maxWidth >= 640 ? 2 : 1);
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: rest.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    mainAxisExtent: 148,
-                  ),
-                  itemBuilder: (context, index) => CatalogCard(story: rest[index], onOpen: () => _open(rest[index])),
-                );
-              },
-            ),
-          ],
-        ],
+        ),
       ],
     );
   }
-}
 
-class _LeadCard extends StatelessWidget {
-  const _LeadCard({required this.story, required this.onRead, required this.onLeave});
-
-  final StoryPin story;
-  final VoidCallback onRead;
-  final VoidCallback onLeave;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: VocesColors.paper,
-      padding: const EdgeInsets.fromLTRB(36, 28, 32, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(coordinateLabel(story.point), style: vocesMono()),
-          ),
-          Text(story.placeName, style: vocesSans(size: 13.5, color: VocesColors.cobalt, weight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text(story.title, style: vocesDisplay(38)),
-          const SizedBox(height: 10),
-          Text(
-            story.narratorName == null ? 'Sin nombre de quien la cuenta' : 'Lo cuenta ${story.narratorName}',
-            style: vocesSans(size: 15),
-          ),
-          if (excerpt(story.body, max: 320).isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Text(excerpt(story.body, max: 320), style: vocesSans(size: 15.5, height: 1.55)),
-          ],
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 22,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+  Widget _body(List<StoryPin> stories) {
+    const grid = SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: 420,
+      mainAxisSpacing: 18,
+      crossAxisSpacing: 18,
+      mainAxisExtent: 232,
+    );
+    if (_loading) {
+      return SliverGrid(
+        gridDelegate: grid,
+        delegate: SliverChildBuilderDelegate((_, _) => const LoadingSlab(height: 232, radius: 24), childCount: 3),
+      );
+    }
+    if (_error != null) {
+      return SliverToBoxAdapter(
+        child: Notice(message: 'No se pudo leer el archivo: $_error', action: 'Reintentar', onAction: reload),
+      );
+    }
+    if (stories.isEmpty) {
+      return SliverToBoxAdapter(
+        child: Glass(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FilledButton(onPressed: onRead, child: const Text('Leer la historia completa')),
-              TextButton(onPressed: onLeave, child: const Text('Dejar una historia aquí')),
+              Text(_category == null ? 'Aún no hay ninguna historia.' : 'No hay historias de este tipo.', style: display(32)),
+              const SizedBox(height: 10),
+              Text('La primera puede ser la de tu calle, tu plaza o el pueblo de tus abuelos.', style: text(size: 16, color: Palette.haze)),
+              const SizedBox(height: 22),
+              LampButton(label: 'Dejar la primera', icon: LucideIcons.mic, onPressed: widget.onLeaveStory),
             ],
           ),
-        ],
+        ),
+      );
+    }
+    return SliverGrid(
+      gridDelegate: grid,
+      delegate: SliverChildBuilderDelegate(
+        (context, index) => StoryCard(key: ValueKey(stories[index].id), story: stories[index]),
+        childCount: stories.length,
       ),
     );
   }
 }
 
-class _CategoryChip extends StatelessWidget {
-  const _CategoryChip({required this.label, required this.selected, required this.onTap});
+class _Hero extends StatelessWidget {
+  const _Hero({required this.narrow, required this.onLeaveStory, required this.onOpenMap});
 
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+  final bool narrow;
+  final VoidCallback onLeaveStory;
+  final VoidCallback onOpenMap;
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? VocesColors.ink : VocesColors.mutedOnDesk;
-    return Semantics(
-      button: true,
-      selected: selected,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? VocesColors.marigold : Colors.transparent,
-            border: Border.all(color: selected ? VocesColors.marigold : VocesColors.mutedOnDesk, width: 1.5),
+    final still = MediaQuery.disableAnimationsOf(context);
+    Widget enter(Widget child, Duration delay) {
+      if (still) return child;
+      return child
+          .animate(delay: delay)
+          .fadeIn(duration: 900.ms, curve: Motion.out)
+          .blurXY(begin: 12, end: 0, duration: 900.ms, curve: Motion.out)
+          .moveY(begin: 18, end: 0, duration: 900.ms, curve: Motion.out);
+    }
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          enter(
+            Row(
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Palette.lamp,
+                    boxShadow: [BoxShadow(color: Palette.lamp.withValues(alpha: 0.8), blurRadius: 12)],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text('Voces del Lugar', style: text(size: 16, weight: FontWeight.w600)),
+              ],
+            ),
+            200.ms,
           ),
-          child: Text(label, style: vocesSans(size: 13, color: color, weight: FontWeight.w600)),
-        ),
+          SizedBox(height: narrow ? 22 : 30),
+          enter(Text('Cada sitio guarda algo que alguien contó.', style: display(narrow ? 50 : 88, height: 0.98)), 400.ms),
+          const SizedBox(height: 18),
+          enter(
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Text(
+                'Historias que la gente mayor asocia a una calle, una plaza o un pueblo. Escúchalas donde pasaron, o deja la que tú conoces.',
+                style: text(size: narrow ? 16 : 18, color: Palette.bone.withValues(alpha: 0.82), height: 1.55),
+              ),
+            ),
+            700.ms,
+          ),
+          const SizedBox(height: 26),
+          enter(
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                LampButton(label: 'Dejar una historia', icon: LucideIcons.mic, onPressed: onLeaveStory),
+                GhostButton(label: 'Abrir el mapa', icon: LucideIcons.map, onPressed: onOpenMap),
+              ],
+            ),
+            950.ms,
+          ),
+        ],
       ),
     );
   }
