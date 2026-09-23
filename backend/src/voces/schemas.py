@@ -100,6 +100,13 @@ class StoryOut(BaseModel):
     distance_m: float | None = None
 
 
+class StoryPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=180)
+    body: str | None = None
+    narrator_name: str | None = Field(default=None, max_length=160)
+    narrator_relation: str | None = Field(default=None, max_length=80)
+
+
 class PlaceHit(BaseModel):
     label: str
     latitude: float
