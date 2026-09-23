@@ -34,6 +34,7 @@ apps/flutter/android/.gradle/
 
 # Editores y sistema
 .worktrees/
+.superpowers/
 .idea/
 *.iml
 .DS_Store
