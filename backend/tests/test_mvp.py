@@ -209,3 +209,26 @@ def test_el_autor_corrige_solo_mientras_esta_en_revision(client: TestClient):
     )
     assert locked.status_code == 409
     assert locked.json()["detail"] == "Solo se corrige una historia en revisión"
+
+
+def test_retirar_esconde_la_historia_del_mapa(client: TestClient):
+    admin = _register(client, "ana@example.com")
+    other = _register(client, "luis@example.com")
+    admin_headers = {"Authorization": f"Bearer {admin}"}
+    created = client.post("/api/v1/stories", json=_story(), headers=admin_headers)
+    story_id = created.json()["id"]
+    client.post(f"/api/v1/stories/{story_id}/publish", headers=admin_headers)
+
+    forbidden = client.post(
+        f"/api/v1/stories/{story_id}/unpublish",
+        headers={"Authorization": f"Bearer {other}"},
+    )
+    assert forbidden.status_code == 403
+
+    withdrawn = client.post(f"/api/v1/stories/{story_id}/unpublish", headers=admin_headers)
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert withdrawn.json()["status"] == "pending_review"
+    assert withdrawn.json()["published_at"] is None
+
+    on_map = client.get("/api/v1/stories/map", params={"west": -4, "south": 40, "east": -3, "north": 41})
+    assert on_map.json() == []
