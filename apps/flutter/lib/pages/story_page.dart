@@ -1,13 +1,23 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:voces/api.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/theme.dart';
+import 'package:voces/widgets/recording_control.dart';
+
+final _speaker = AudioPlayer();
+
+Future<void> _playWithSpeaker(String url) => _speaker.play(UrlSource(url));
+
+Future<void> _stopSpeaker() => _speaker.stop();
 
 class StoryPage extends StatelessWidget {
-  const StoryPage({super.key, required this.story});
+  const StoryPage({super.key, required this.story, this.play, this.stop});
 
   final StoryPin story;
+  final Future<void> Function(String url)? play;
+  final Future<void> Function()? stop;
 
   @override
   Widget build(BuildContext context) {
@@ -35,8 +45,12 @@ class StoryPage extends StatelessWidget {
               if (story.mediaUrls.isNotEmpty) ...[
                 const SizedBox(height: 28),
                 const Text('Hay una grabación de esta historia.', style: TextStyle(fontSize: 18)),
-                const SizedBox(height: 4),
-                SelectableText(story.mediaUrls.first),
+                const SizedBox(height: 8),
+                RecordingControl(
+                  url: story.mediaUrls.first,
+                  play: play ?? _playWithSpeaker,
+                  stop: stop ?? _stopSpeaker,
+                ),
               ],
               const SizedBox(height: 36),
               Text(

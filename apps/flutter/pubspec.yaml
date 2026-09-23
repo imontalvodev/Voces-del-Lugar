@@ -41,6 +41,7 @@ dependencies:
   google_fonts: ^8.2.1
   shared_preferences: ^2.5.5
   geolocator: ^13.0.4
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
