@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:voces/api.dart';
 import 'package:voces/shell.dart';
-import 'package:voces/theme.dart';
+import 'package:voces/ui/sky.dart';
+import 'package:voces/ui/tokens.dart';
 
 void main() {
   runApp(const VocesApp());
@@ -21,7 +22,7 @@ class _VocesAppState extends State<VocesApp> {
   @override
   void initState() {
     super.initState();
-    _api.restore().then((_) {
+    _api.restore().whenComplete(() {
       if (mounted) setState(() => _ready = true);
     });
   }
@@ -32,7 +33,17 @@ class _VocesAppState extends State<VocesApp> {
       title: 'Voces del Lugar',
       debugShowCheckedModeBanner: false,
       theme: vocesTheme(),
-      home: _ready ? AppShell(api: _api) : const Scaffold(body: Center(child: Text('Voces del Lugar'))),
+      home: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 600),
+        child: _ready
+            ? AppShell(api: _api)
+            : Scaffold(
+                backgroundColor: Palette.night,
+                body: Sky(
+                  child: Center(child: Text('Voces del Lugar', style: display(40))),
+                ),
+              ),
+      ),
     );
   }
 }
