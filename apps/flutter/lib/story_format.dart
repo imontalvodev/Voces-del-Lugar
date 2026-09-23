@@ -1,3 +1,13 @@
+import 'package:latlong2/latlong.dart';
+
+String coordinateLabel(LatLng point) {
+  final lat = point.latitude.abs().toStringAsFixed(4);
+  final lon = point.longitude.abs().toStringAsFixed(4);
+  final ns = point.latitude >= 0 ? 'N' : 'S';
+  final ew = point.longitude >= 0 ? 'E' : 'O';
+  return '$lat° $ns, $lon° $ew';
+}
+
 String storyStatusLabel(String status) {
   return switch (status) {
     'published' => 'Publicada',
