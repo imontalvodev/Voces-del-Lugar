@@ -186,12 +186,63 @@ class AccountPageState extends State<AccountPage> {
       else if (_mine.isEmpty)
         const StoryListStatus(message: 'Todavía no has dejado ninguna.')
       else
-        ChronicleList(
-          stories: _mine,
-          showStatus: true,
-          onOpen: (story) {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => StoryPage(story: story)));
-          },
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final story in _mine) ...[
+              ChronicleList(
+                stories: [story],
+                showStatus: true,
+                onOpen: (opened) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StoryPage(
+                        story: opened,
+                        onUnpublish: account.canModerate ? () => widget.api.unpublish(opened.id) : null,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              if (story.status == 'pending_review')
+                TextButton(
+                  onPressed: () async {
+                    final title = TextEditingController(text: story.title);
+                    final body = TextEditingController(text: story.body ?? '');
+                    final save = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Corregir'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(controller: title, decoration: const InputDecoration(labelText: 'Título')),
+                            TextField(
+                              controller: body,
+                              decoration: const InputDecoration(labelText: 'Qué se contaba'),
+                              minLines: 3,
+                              maxLines: 6,
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+                          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Guardar la corrección')),
+                        ],
+                      ),
+                    );
+                    if (save == true) {
+                      await widget.api.updateStory(story.id, title: title.text.trim(), body: body.text.trim());
+                      await reload();
+                    }
+                    title.dispose();
+                    body.dispose();
+                  },
+                  child: const Text('Corregir'),
+                ),
+            ],
+          ],
         ),
       if (_error != null) _errorText(),
     ];

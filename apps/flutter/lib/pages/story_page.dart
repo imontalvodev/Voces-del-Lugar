@@ -13,11 +13,12 @@ Future<void> _playWithSpeaker(String url) => _speaker.play(UrlSource(url));
 Future<void> _stopSpeaker() => _speaker.stop();
 
 class StoryPage extends StatelessWidget {
-  const StoryPage({super.key, required this.story, this.play, this.stop});
+  const StoryPage({super.key, required this.story, this.play, this.stop, this.onUnpublish});
 
   final StoryPin story;
   final Future<void> Function(String url)? play;
   final Future<void> Function()? stop;
+  final Future<void> Function()? onUnpublish;
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +58,10 @@ class StoryPage extends StatelessWidget {
                 '${storyStatusLabel(story.status)}. ${categoryLabel(story.category)}. Licencia ${licenseLabel(story.license)}.',
                 style: const TextStyle(color: VocesColors.muted),
               ),
+              if (story.status == 'published' && onUnpublish != null) ...[
+                const SizedBox(height: 16),
+                OutlinedButton(onPressed: onUnpublish, child: const Text('Retirar del mapa')),
+              ],
             ],
           ),
         ),

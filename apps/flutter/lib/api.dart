@@ -229,6 +229,23 @@ class VocesApi {
     _expect(response);
   }
 
+  Future<void> updateStory(String id, {String? title, String? body}) async {
+    final response = await http.patch(
+      Uri.parse('$apiBase/api/v1/stories/$id'),
+      headers: {'Authorization': 'Bearer ${account!.token}', 'Content-Type': 'application/json'},
+      body: jsonEncode({'title': title, 'body': body}),
+    );
+    _expect(response);
+  }
+
+  Future<void> unpublish(String id) async {
+    final response = await http.post(
+      Uri.parse('$apiBase/api/v1/stories/$id/unpublish'),
+      headers: {'Authorization': 'Bearer ${account!.token}'},
+    );
+    _expect(response);
+  }
+
   Map<String, String> get _jsonAuth => {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ${account!.token}',
