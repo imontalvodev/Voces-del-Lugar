@@ -98,3 +98,9 @@ class StoryOut(BaseModel):
     place: PlaceOut
     media: list[MediaOut]
     distance_m: float | None = None
+
+
+class PlaceHit(BaseModel):
+    label: str
+    latitude: float
+    longitude: float
