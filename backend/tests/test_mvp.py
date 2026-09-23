@@ -168,3 +168,19 @@ def test_un_contribuidor_no_publica(client: TestClient):
     story_id = created.json()["id"]
     response = client.post(f"/api/v1/stories/{story_id}/publish", headers=headers)
     assert response.status_code == 403
+
+
+def test_solo_un_moderador_lista_la_revision(client: TestClient):
+    admin = _register(client, "ana@example.com")
+    other = _register(client, "luis@example.com")
+    headers = {"Authorization": f"Bearer {other}"}
+    created = client.post("/api/v1/stories", json=_story("En cola"), headers=headers)
+    assert created.status_code == 201
+
+    forbidden = client.get("/api/v1/stories/review", headers=headers)
+    assert forbidden.status_code == 403
+
+    queue = client.get("/api/v1/stories/review", headers={"Authorization": f"Bearer {admin}"})
+    assert queue.status_code == 200
+    assert [item["title"] for item in queue.json()] == ["En cola"]
+    assert queue.json()[0]["status"] == "pending_review"
