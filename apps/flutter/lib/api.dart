@@ -70,6 +70,22 @@ class StoryPin {
   }
 }
 
+class PlaceHit {
+  PlaceHit({required this.label, required this.latitude, required this.longitude});
+
+  final String label;
+  final double latitude;
+  final double longitude;
+
+  factory PlaceHit.fromJson(Map<String, dynamic> json) {
+    return PlaceHit(
+      label: json['label'] as String,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+    );
+  }
+}
+
 class VocesApi {
   Account? account;
 
@@ -122,6 +138,14 @@ class VocesApi {
     _expect(response);
     final rows = jsonDecode(response.body) as List<dynamic>;
     return [for (final row in rows) StoryPin.fromJson(row as Map<String, dynamic>)];
+  }
+
+  Future<List<PlaceHit>> searchPlaces(String query) async {
+    final uri = Uri.parse('$apiBase/api/v1/geocode').replace(queryParameters: {'q': query});
+    final response = await http.get(uri);
+    _expect(response);
+    final rows = jsonDecode(response.body) as List<dynamic>;
+    return [for (final row in rows) PlaceHit.fromJson(row as Map<String, dynamic>)];
   }
 
   Future<List<StoryPin>> archive() => mapStories(-9.5, 35.8, 4.5, 43.9);
