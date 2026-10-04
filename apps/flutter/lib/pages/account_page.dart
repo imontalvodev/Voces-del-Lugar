@@ -170,7 +170,9 @@ class AccountPageState extends State<AccountPage> {
                           Text(
                             _queue.isEmpty
                                 ? 'No hay nada esperando. Lo que deje la gente aparecerá aquí antes de llegar al mapa.'
-                                : '${_queue.length} ${_queue.length == 1 ? 'historia espera' : 'historias esperan'} a que alguien la escuche antes de publicarla.',
+                                : _queue.length == 1
+                                    ? 'Una historia espera a que alguien la escuche antes de publicarla.'
+                                    : '${_queue.length} historias esperan a que alguien las escuche antes de publicarlas.',
                             style: text(size: 15, color: Palette.haze),
                           ),
                         ],
