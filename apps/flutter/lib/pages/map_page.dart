@@ -93,24 +93,34 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
 
   StoryPin? get _selected => _stories.where((s) => s.id == _selectedId).firstOrNull;
 
+  int _reloadTicket = 0;
+
   Future<void> reload() async {
-    if (!_ready) return;
+    if (!_ready || !mounted) return;
+    final ticket = ++_reloadTicket;
     final bounds = _map.camera.visibleBounds;
+    // Muy alejado, el recuadro puede dar la vuelta al mundo: entonces se pide entero.
+    final wraps = bounds.west >= bounds.east || bounds.east - bounds.west >= 360;
     setState(() => _loading = true);
     try {
-      final stories = await widget.api.mapStories(bounds.west, bounds.south, bounds.east, bounds.north);
-      if (!mounted) return;
+      final stories = await widget.api.mapStories(
+        wraps ? -180 : bounds.west,
+        bounds.south,
+        wraps ? 180 : bounds.east,
+        bounds.north,
+      );
+      if (!mounted || ticket != _reloadTicket) return;
       setState(() {
         _stories = stories;
         _error = null;
         if (_selectedId != null && stories.every((s) => s.id != _selectedId)) _selectedId = null;
       });
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted && ticket == _reloadTicket) setState(() => _error = error.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'No hay conexión con el archivo.');
+      if (mounted && ticket == _reloadTicket) setState(() => _error = 'No hay conexión con el archivo.');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && ticket == _reloadTicket) setState(() => _loading = false);
     }
   }
 
@@ -167,9 +177,14 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     setState(() => _locating = true);
     final messenger = ScaffoldMessenger.of(context);
     final moves = ++_moves;
-    final point = await widget.locate(ask: true);
+    LatLng? point;
+    try {
+      // Si nadie contesta al aviso del navegador, el botón no se queda girando.
+      point = await widget.locate(ask: true).timeout(const Duration(seconds: 20), onTimeout: () => null);
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
     if (!mounted) return;
-    setState(() => _locating = false);
     if (point == null) {
       messenger.showSnackBar(
         const SnackBar(content: Text('No se puede saber dónde estás. Busca tu pueblo o tu barrio por el nombre.')),

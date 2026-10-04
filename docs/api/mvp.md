@@ -7,7 +7,7 @@ Base: `/api/v1`. Esquema interactivo: `/docs` cuando la API está en marcha.
 | POST | `/auth/register` | cualquiera | Crea la cuenta. La primera de la base queda `admin`. |
 | POST | `/auth/login` | cualquiera | Devuelve un JWT. |
 | GET | `/auth/me` | cuenta | Perfil y rol. |
-| GET | `/stories/map?west&south&east&north` | cualquiera | Historias `published` dentro del recuadro, en grados. Lo que se sale de ±180/±90 se recorta, así que el mundo entero vale. |
+| GET | `/stories/map?west&south&east&north[&limit]` | cualquiera | Historias `published` dentro del recuadro, en grados. Lo que se sale de ±180/±90 se recorta, así que el mundo entero vale. Las más recientes primero; `limit` de 1 a 1000, 200 por defecto. |
 | GET | `/stories/nearby?lat&lng&radius_m` | cualquiera | Historias `published` a menos de `radius_m` metros (máximo 50000). |
 | GET | `/geocode?q=` | cualquiera | Hasta 5 lugares (`label`, `latitude`, `longitude` y `kind`, el tipo según OpenStreetMap: `city`, `village`, `province`…) para centrar el mapa. `q` tiene al menos 2 letras. |
 | GET | `/stories/mine` | cuenta | Historias de quien llama, en cualquier estado. |

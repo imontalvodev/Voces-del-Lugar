@@ -132,6 +132,17 @@ class _ComposePageState extends State<ComposePage> {
     try {
       // Si un intento anterior ya guardó la historia y falló al subir el audio,
       // se reintenta solo lo que faltaba: así no quedan historias repetidas.
+      final previous = _created;
+      if (previous != null) {
+        // Lo que se haya corregido desde el intento anterior también cuenta.
+        await widget.api.updateStory(
+          previous.id,
+          title: _title.text.trim(),
+          body: _body.text.trim(),
+          narratorName: _narrator.text.trim(),
+          narratorRelation: _relation.text.trim(),
+        );
+      }
       final story = _created ??= await widget.api.createStory(
         title: _title.text.trim(),
         body: _body.text.trim(),
@@ -282,6 +293,7 @@ class _ComposePageState extends State<ComposePage> {
             TextField(
               controller: _place,
               autofocus: true,
+              readOnly: _created != null,
               style: text(size: 18),
               textInputAction: TextInputAction.next,
               onSubmitted: (_) => _next(),
@@ -314,7 +326,14 @@ class _ComposePageState extends State<ComposePage> {
               runSpacing: 8,
               children: [
                 for (final c in storyCategories)
-                  FilterPill(label: categoryLabel(c), selected: _category == c, onTap: () => setState(() => _category = c)),
+                  FilterPill(
+                    label: categoryLabel(c),
+                    selected: _category == c,
+                    // Ya guardada, la categoría no se puede cambiar desde aquí.
+                    onTap: () {
+                      if (_created == null) setState(() => _category = c);
+                    },
+                  ),
               ],
             ),
             const SizedBox(height: 24),

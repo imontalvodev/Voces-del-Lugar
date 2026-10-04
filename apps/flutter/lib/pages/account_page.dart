@@ -30,6 +30,7 @@ class AccountPageState extends State<AccountPage> {
   List<StoryPin> _queue = [];
   final Set<String> _deciding = {};
   bool _loadingMine = false;
+  int _generation = 0;
 
   @override
   void initState() {
@@ -49,30 +50,44 @@ class AccountPageState extends State<AccountPage> {
 
   Future<void> reload() async {
     if (!mounted) return;
-    if (widget.api.account == null) {
+    // Cada recarga invalida las anteriores: si la sesión cambia a medias, lo
+    // que llegue tarde de la cuenta anterior no se pinta.
+    final generation = ++_generation;
+    final account = widget.api.account;
+    if (account == null) {
       setState(() {
         _mine = [];
         _queue = [];
+        _loadingMine = false;
       });
       return;
     }
+    bool current() => mounted && generation == _generation && widget.api.account == account;
     setState(() => _loadingMine = _mine.isEmpty);
+    String? error;
     try {
       final stories = await widget.api.mine();
-      final queue = widget.api.account?.canModerate == true ? await widget.api.reviewQueue() : <StoryPin>[];
-      if (mounted) {
-        setState(() {
-          _mine = stories;
-          _queue = queue;
-          _error = null;
-        });
-      }
-    } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (current()) setState(() => _mine = stories);
+    } on ApiException catch (e) {
+      error = e.message;
     } catch (_) {
-      if (mounted) setState(() => _error = 'No hay conexión con el archivo.');
-    } finally {
-      if (mounted) setState(() => _loadingMine = false);
+      error = 'No hay conexión con el archivo.';
+    }
+    if (account.canModerate && current()) {
+      try {
+        final queue = await widget.api.reviewQueue();
+        if (current()) setState(() => _queue = queue);
+      } on ApiException catch (e) {
+        error ??= e.message;
+      } catch (_) {
+        error ??= 'No hay conexión con el archivo.';
+      }
+    }
+    if (current()) {
+      setState(() {
+        _error = error;
+        _loadingMine = false;
+      });
     }
   }
 
@@ -101,6 +116,7 @@ class AccountPageState extends State<AccountPage> {
   }
 
   Future<void> _logout() async {
+    _generation++;
     await widget.api.logout();
     widget.onChanged();
     setState(() {
