@@ -274,3 +274,14 @@ def test_el_mapa_del_mundo_entero_ve_las_historias(client: TestClient):
         response = client.get(f"/api/v1/stories/map?{box}")
         assert response.status_code == 200, response.text
         assert [s["id"] for s in response.json()] == [story_id]
+
+
+def test_el_mapa_respeta_el_limite(client: TestClient):
+    token = _register(client, "ana@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+    for title in ("Una", "Dos"):
+        story_id = client.post("/api/v1/stories", json=_story(title), headers=headers).json()["id"]
+        client.post(f"/api/v1/stories/{story_id}/publish", headers=headers)
+    box = "west=-180&south=-85&east=180&north=85"
+    assert [s["title"] for s in client.get(f"/api/v1/stories/map?{box}&limit=1").json()] == ["Dos"]
+    assert client.get(f"/api/v1/stories/map?{box}&limit=0").status_code == 422

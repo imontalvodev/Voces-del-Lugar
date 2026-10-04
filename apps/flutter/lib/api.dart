@@ -12,12 +12,12 @@ const _apiBaseOverride = String.fromEnvironment('API_BASE');
 /// Puerto en el que escucha la API cuando no se indica `API_BASE`.
 const apiPort = 8001;
 
-/// Sin `API_BASE`, la app web busca la API en la misma máquina que la sirve.
-/// Así funciona igual abierta en `localhost` que desde otro equipo por IP.
+/// Sin `API_BASE`, la app web busca la API en la misma máquina que la sirve:
+/// por HTTP en el puerto de la API; por HTTPS en el mismo origen, detrás del
+/// proxy que sirve la app (el navegador no deja mezclar HTTPS con HTTP).
 String defaultApiBase(Uri page) {
-  if ((page.scheme == 'http' || page.scheme == 'https') && page.host.isNotEmpty) {
-    return '${page.scheme}://${page.host}:$apiPort';
-  }
+  if (page.scheme == 'https' && page.host.isNotEmpty) return page.origin;
+  if (page.scheme == 'http' && page.host.isNotEmpty) return 'http://${page.host}:$apiPort';
   return 'http://localhost:$apiPort';
 }
 
@@ -224,7 +224,7 @@ class VocesApi {
         return;
       }
       if (me.statusCode != 200 || account != current) return;
-      await _store(current.email, current.token, jsonDecode(me.body) as Map<String, dynamic>);
+      await _store(current.email, current.token, jsonDecode(me.body) as Map<String, dynamic>, expected: current);
       _touched();
     } catch (_) {
       // Sin conexión se sigue con lo guardado.
@@ -258,9 +258,10 @@ class VocesApi {
     _touched();
   }
 
-  Future<List<StoryPin>> mapStories(double west, double south, double east, double north) async {
-    final uri = Uri.parse('$apiBase/api/v1/stories/map')
-        .replace(queryParameters: {'west': '$west', 'south': '$south', 'east': '$east', 'north': '$north'});
+  Future<List<StoryPin>> mapStories(double west, double south, double east, double north, {int limit = 200}) async {
+    final uri = Uri.parse('$apiBase/api/v1/stories/map').replace(
+      queryParameters: {'west': '$west', 'south': '$south', 'east': '$east', 'north': '$north', 'limit': '$limit'},
+    );
     final response = await _http.get(uri);
     _expect(response);
     final rows = jsonDecode(response.body) as List<dynamic>;
@@ -268,7 +269,7 @@ class VocesApi {
   }
 
   /// Todo lo publicado. El mapa del mundo entero cabe en un recuadro.
-  Future<List<StoryPin>> archive() => mapStories(-180, -85, 180, 85);
+  Future<List<StoryPin>> archive() => mapStories(-180, -85, 180, 85, limit: 1000);
 
   Future<List<StoryPin>> mine() => _list('/api/v1/stories/mine', auth: true);
 
@@ -330,7 +331,7 @@ class VocesApi {
 
   Future<void> uploadAudio(String storyId, String filename, List<int> bytes) async {
     final request = http.MultipartRequest('POST', Uri.parse('$apiBase/api/v1/stories/$storyId/audio'));
-    request.headers['Authorization'] = 'Bearer ${account!.token}';
+    request.headers.addAll(_auth);
     request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename, contentType: audioType(filename)));
     final streamed = await _http.send(request);
     final response = await http.Response.fromStream(streamed);
@@ -369,7 +370,11 @@ class VocesApi {
     return StoryPin.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Map<String, String> get _auth => {'Authorization': 'Bearer ${account!.token}'};
+  Map<String, String> get _auth {
+    final current = account;
+    if (current == null) throw ApiException('Entra en tu cuenta para hacer esto.');
+    return {'Authorization': 'Bearer ${current.token}'};
+  }
 
   Map<String, String> get _jsonAuth => {'Content-Type': 'application/json', ..._auth};
 
@@ -380,20 +385,24 @@ class VocesApi {
     _touched();
   }
 
-  Future<void> _store(String email, String token, Map<String, dynamic> me) async {
-    account = Account(
+  /// Guarda la sesión. Con [expected], solo si sigue siendo la misma: si se
+  /// cerró mientras tanto, no se resucita el token en disco.
+  Future<void> _store(String email, String token, Map<String, dynamic> me, {Account? expected}) async {
+    if (expected != null && account != expected) return;
+    final next = Account(
       token: token,
       id: me['id'] as String? ?? '',
       displayName: me['display_name'] as String,
       role: me['role'] as String,
       email: email,
     );
+    account = next;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('token', token);
-    await prefs.setString('user_id', account!.id);
-    await prefs.setString('display_name', account!.displayName);
-    await prefs.setString('role', account!.role);
-    await prefs.setString('email', email);
+    final values = {'token': token, 'user_id': next.id, 'display_name': next.displayName, 'role': next.role, 'email': email};
+    for (final entry in values.entries) {
+      if (account != next) return;
+      await prefs.setString(entry.key, entry.value);
+    }
   }
 
   void _expect(http.Response response) {
