@@ -32,6 +32,16 @@ void main() {
     expect(PlaceHit(label: 'Soria', latitude: 0, longitude: 0).context, '');
   });
 
+  test('de dos lugares con el mismo nombre se queda el pueblo o la ciudad', () {
+    final hits = distinctPlaces([
+      PlaceHit(label: 'Soria, Castilla y León, España', latitude: 41.6, longitude: -2.7, kind: 'province'),
+      PlaceHit(label: 'Soria, Castilla y León, España', latitude: 41.76, longitude: -2.46, kind: 'city'),
+      PlaceHit(label: 'Garray, Soria, Castilla y León, España', latitude: 41.8, longitude: -2.4, kind: 'village'),
+    ]);
+    expect(hits.map((h) => h.latitude), [41.76, 41.8]);
+    expect(hits.first.kindLabel, 'Ciudad');
+  });
+
   test('una sola farola por lugar aunque haya varias historias', () {
     final stories = [
       StoryPin.fromJson(storyJson(id: 'a', placeId: 'p1')),

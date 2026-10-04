@@ -97,11 +97,31 @@ class StoryPin {
 
 /// Un lugar que devuelve la búsqueda por nombre.
 class PlaceHit {
-  PlaceHit({required this.label, required this.latitude, required this.longitude});
+  PlaceHit({required this.label, required this.latitude, required this.longitude, this.kind});
 
   final String label;
   final double latitude;
   final double longitude;
+
+  /// Qué es según OpenStreetMap: city, town, village, province…
+  final String? kind;
+
+  static const _settlements = {'city', 'town', 'village', 'hamlet', 'suburb', 'quarter', 'neighbourhood', 'municipality'};
+
+  bool get isSettlement => _settlements.contains(kind);
+
+  /// Cómo se dice en castellano, o vacío si no hace falta aclararlo.
+  String get kindLabel => switch (kind) {
+    'city' => 'Ciudad',
+    'town' || 'village' || 'municipality' => 'Pueblo',
+    'hamlet' => 'Aldea',
+    'suburb' || 'quarter' || 'neighbourhood' => 'Barrio',
+    'province' => 'Provincia',
+    'state' => 'Comunidad',
+    'county' => 'Comarca',
+    'country' => 'País',
+    _ => '',
+  };
 
   LatLng get point => LatLng(latitude, longitude);
 
@@ -120,8 +140,21 @@ class PlaceHit {
       label: json['label'] as String,
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),
+      kind: json['kind'] as String?,
     );
   }
+}
+
+/// Nominatim devuelve a veces el mismo nombre dos veces (la provincia y la
+/// ciudad de Soria). Se queda uno por nombre, mejor el que es un pueblo o una
+/// ciudad, que es a donde quiere ir casi todo el mundo.
+List<PlaceHit> distinctPlaces(List<PlaceHit> hits) {
+  final byLabel = <String, PlaceHit>{};
+  for (final hit in hits) {
+    final current = byLabel[hit.label];
+    if (current == null || (!current.isSettlement && hit.isSettlement)) byLabel[hit.label] = hit;
+  }
+  return byLabel.values.toList();
 }
 
 /// Una sola farola por lugar: si un sitio tiene varias historias, queda la primera.
@@ -247,7 +280,7 @@ class VocesApi {
     final response = await _http.get(uri);
     _expect(response);
     final rows = jsonDecode(response.body) as List<dynamic>;
-    return [for (final row in rows) PlaceHit.fromJson(row as Map<String, dynamic>)];
+    return distinctPlaces([for (final row in rows) PlaceHit.fromJson(row as Map<String, dynamic>)]);
   }
 
   /// La ficha tal como está ahora: con sesión se ven también las propias en revisión.
