@@ -22,12 +22,12 @@ STORY_COLUMNS = """
 def validate_story(payload: StoryIn) -> None:
     payload.place.check_type()
     if payload.category not in CATEGORIES:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Categoría no válida")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Categoría no válida")
     if payload.license not in LICENSES:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Licencia no válida")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Licencia no válida")
     if not payload.narrator_consent:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "Hace falta el consentimiento del narrador o de su familia",
         )
 
@@ -190,6 +190,14 @@ def update_story(session: Session, story_id: UUID, author_id: UUID, patch: Story
     if row["status"] != "pending_review":
         raise HTTPException(status.HTTP_409_CONFLICT, "Solo se corrige una historia en revisión")
     changes = patch.model_dump(exclude_unset=True)
+    if "title" in changes:
+        title = _blank_to_none(changes["title"])
+        if title is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "La historia necesita un título")
+        changes["title"] = title
+    for column in ("body", "narrator_name", "narrator_relation"):
+        if column in changes:
+            changes[column] = _blank_to_none(changes[column])
     if not changes:
         return
     assignments = ", ".join(f"{column} = :{column}" for column in changes)
@@ -304,7 +312,7 @@ def assert_publishable(session: Session, row: dict) -> None:
     ).first()
     if not has_body and not has_audio:
         raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
             "Hace falta el texto de la historia o un audio",
         )
 

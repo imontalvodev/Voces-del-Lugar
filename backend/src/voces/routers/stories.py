@@ -36,7 +36,7 @@ def map_stories(
     session: Annotated[Session, Depends(get_session)],
 ) -> list[StoryOut]:
     if west >= east or south >= north:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El recuadro no es válido")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "El recuadro no es válido")
     return stories_out(session, fetch_map(session, west, south, east, north))
 
 
@@ -48,9 +48,9 @@ def nearby_stories(
     radius_m: float = 5000,
 ) -> list[StoryOut]:
     if not -90 <= lat <= 90 or not -180 <= lng <= 180:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Coordenadas no válidas")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Coordenadas no válidas")
     if not 1 <= radius_m <= 50000:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El radio tiene que estar entre 1 y 50000 m")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "El radio tiene que estar entre 1 y 50000 m")
     return stories_out(session, fetch_nearby(session, lat, lng, radius_m))
 
 
