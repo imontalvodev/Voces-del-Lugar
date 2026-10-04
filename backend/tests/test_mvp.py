@@ -247,3 +247,18 @@ def test_el_mismo_sitio_no_crea_otro_lugar(client: TestClient):
     other["place"]["name"] = "El lavadero"
     third = client.post("/api/v1/stories", json=other, headers=headers)
     assert third.json()["place"]["id"] != first.json()["place"]["id"]
+
+
+def test_corregir_sin_titulo_no_rompe_la_historia(client: TestClient):
+    token = _register(client, "ana@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+    story_id = client.post("/api/v1/stories", json=_story(), headers=headers).json()["id"]
+
+    for title in (None, "   "):
+        response = client.patch(f"/api/v1/stories/{story_id}", json={"title": title}, headers=headers)
+        assert response.status_code == 422, response.text
+
+    cleared = client.patch(f"/api/v1/stories/{story_id}", json={"body": "   "}, headers=headers)
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["body"] is None
+    assert cleared.json()["title"] == "La esquina"
