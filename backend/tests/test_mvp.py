@@ -262,3 +262,15 @@ def test_corregir_sin_titulo_no_rompe_la_historia(client: TestClient):
     assert cleared.status_code == 200, cleared.text
     assert cleared.json()["body"] is None
     assert cleared.json()["title"] == "La esquina"
+
+
+def test_el_mapa_del_mundo_entero_ve_las_historias(client: TestClient):
+    token = _register(client, "ana@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+    story_id = client.post("/api/v1/stories", json=_story(), headers=headers).json()["id"]
+    client.post(f"/api/v1/stories/{story_id}/publish", headers=headers)
+
+    for box in ("west=-180&south=-85&east=180&north=85", "west=-400&south=-95&east=400&north=95"):
+        response = client.get(f"/api/v1/stories/map?{box}")
+        assert response.status_code == 200, response.text
+        assert [s["id"] for s in response.json()] == [story_id]
