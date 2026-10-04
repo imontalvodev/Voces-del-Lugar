@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
+import 'package:voces/pages/story_page.dart' show confirmReject;
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/kit.dart';
 import 'package:voces/ui/story_card.dart';
@@ -26,16 +27,20 @@ class AccountPageState extends State<AccountPage> {
   bool _hidden = true;
   String? _error;
   List<StoryPin> _mine = [];
+  List<StoryPin> _queue = [];
+  final Set<String> _deciding = {};
   bool _loadingMine = false;
 
   @override
   void initState() {
     super.initState();
+    widget.api.changes.addListener(reload);
     reload();
   }
 
   @override
   void dispose() {
+    widget.api.changes.removeListener(reload);
     _email.dispose();
     _password.dispose();
     _name.dispose();
@@ -43,11 +48,25 @@ class AccountPageState extends State<AccountPage> {
   }
 
   Future<void> reload() async {
-    if (widget.api.account == null) return;
-    setState(() => _loadingMine = true);
+    if (!mounted) return;
+    if (widget.api.account == null) {
+      setState(() {
+        _mine = [];
+        _queue = [];
+      });
+      return;
+    }
+    setState(() => _loadingMine = _mine.isEmpty);
     try {
       final stories = await widget.api.mine();
-      if (mounted) setState(() => _mine = stories);
+      final queue = widget.api.account?.canModerate == true ? await widget.api.reviewQueue() : <StoryPin>[];
+      if (mounted) {
+        setState(() {
+          _mine = stories;
+          _queue = queue;
+          _error = null;
+        });
+      }
     } on ApiException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {
@@ -86,8 +105,36 @@ class AccountPageState extends State<AccountPage> {
     widget.onChanged();
     setState(() {
       _mine = [];
+      _queue = [];
       _error = null;
     });
+  }
+
+  /// Publica o rechaza desde la cola sin abrir la ficha.
+  Future<void> _decide(StoryPin story, {required bool publish}) async {
+    if (_deciding.contains(story.id)) return;
+    if (!publish) {
+      final sure = await confirmReject(context, story);
+      if (!sure || !mounted) return;
+    }
+    setState(() => _deciding.add(story.id));
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      if (publish) {
+        await widget.api.publish(story.id);
+      } else {
+        await widget.api.reject(story.id);
+      }
+      if (!mounted) return;
+      setState(() => _queue = [for (final s in _queue) if (s.id != story.id) s]);
+      messenger.showSnackBar(SnackBar(content: Text(publish ? '«${story.title}» ya está en el mapa.' : '«${story.title}» queda rechazada.')));
+    } on ApiException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    } catch (_) {
+      messenger.showSnackBar(const SnackBar(content: Text('No hay conexión con el archivo.')));
+    } finally {
+      if (mounted) setState(() => _deciding.remove(story.id));
+    }
   }
 
   @override
@@ -111,6 +158,51 @@ class AccountPageState extends State<AccountPage> {
                     ),
                   ),
                 ),
+                if (account.canModerate) ...[
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(pad, 48, pad, 20),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Por revisar', style: display(narrow ? 34 : 44)),
+                          const SizedBox(height: 6),
+                          Text(
+                            _queue.isEmpty
+                                ? 'No hay nada esperando. Lo que deje la gente aparecerá aquí antes de llegar al mapa.'
+                                : '${_queue.length} ${_queue.length == 1 ? 'historia espera' : 'historias esperan'} a que alguien la escuche antes de publicarla.',
+                            style: text(size: 15, color: Palette.haze),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (_queue.isNotEmpty)
+                    SliverPadding(
+                      padding: EdgeInsets.symmetric(horizontal: pad),
+                      sliver: SliverGrid(
+                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 520,
+                          mainAxisSpacing: 18,
+                          crossAxisSpacing: 18,
+                          mainAxisExtent: 300,
+                        ),
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final story = _queue[index];
+                            return ReviewCard(
+                              key: ValueKey(story.id),
+                              story: story,
+                              busy: _deciding.contains(story.id),
+                              onPublish: () => _decide(story, publish: true),
+                              onReject: () => _decide(story, publish: false),
+                            );
+                          },
+                          childCount: _queue.length,
+                        ),
+                      ),
+                    ),
+                ],
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(pad, 48, pad, 20),
                   sliver: SliverToBoxAdapter(
