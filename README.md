@@ -41,6 +41,15 @@ cd apps/flutter
 flutter run -d web-server --web-port 8080 --dart-define=API_BASE=http://localhost:8001
 ```
 
+Sin `API_BASE`, la app web busca la API en el puerto 8001 de la misma máquina que la sirve. Para abrirla desde otro equipo de la red basta con escuchar en todas las interfaces y entrar por la IP:
+
+```bash
+cd backend && ../.venv/bin/uvicorn voces.main:app --app-dir src --host 0.0.0.0 --port 8001
+cd apps/flutter && flutter build web --release && python3 -m http.server 8080 --bind 0.0.0.0 --directory build/web
+```
+
+Fuera de `localhost` y sin HTTPS el navegador no da la posición ni el micrófono: el mapa se abre igual y la historia se puede escribir o adjuntar un audio.
+
 `docker compose up` levanta también la API. Contrato en [`docs/api/mvp.md`](./docs/api/mvp.md). La primera cuenta que se registra es administradora y puede publicar.
 
 ## Estado del proyecto
