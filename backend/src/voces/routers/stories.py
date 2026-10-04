@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from voces.db import get_session
 from voces.deps import optional_user_id, require_user
 from voces.deps import load_user
-from voces.schemas import StoryIn, StoryOut
+from voces.schemas import StoryIn, StoryOut, StoryPatch
 from voces.stories import (
     assert_publishable,
     can_read,
@@ -16,9 +16,11 @@ from voces.stories import (
     fetch_map,
     fetch_mine,
     fetch_nearby,
+    fetch_review,
     fetch_story,
     stories_out,
     to_story,
+    update_story,
     media_for,
 )
 
@@ -60,6 +62,15 @@ def mine(
     return stories_out(session, fetch_mine(session, user["id"]))
 
 
+@router.get("/review", response_model=list[StoryOut])
+def review(
+    user: Annotated[dict, Depends(require_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> list[StoryOut]:
+    _require_moderator(user)
+    return stories_out(session, fetch_review(session))
+
+
 @router.get("/{story_id}", response_model=StoryOut)
 def detail(
     story_id: UUID,
@@ -84,6 +95,17 @@ def create(
     story_id = create_story(session, user["id"], payload)
     row = fetch_story(session, story_id)
     return to_story(row, [])
+
+
+@router.patch("/{story_id}", response_model=StoryOut)
+def update(
+    story_id: UUID,
+    payload: StoryPatch,
+    user: Annotated[dict, Depends(require_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> StoryOut:
+    update_story(session, story_id, user["id"], payload)
+    return to_story(fetch_story(session, story_id), media_for(session, [story_id]).get(story_id, []))
 
 
 @router.post("/{story_id}/publish", response_model=StoryOut)
@@ -121,6 +143,24 @@ def reject(
         raise HTTPException(status.HTTP_409_CONFLICT, "Solo se rechaza una historia en revisión")
     session.execute(
         text("UPDATE stories SET status = 'rejected' WHERE id = :id"),
+        {"id": story_id},
+    )
+    session.commit()
+    return to_story(fetch_story(session, story_id), media_for(session, [story_id]).get(story_id, []))
+
+
+@router.post("/{story_id}/unpublish", response_model=StoryOut)
+def unpublish(
+    story_id: UUID,
+    user: Annotated[dict, Depends(require_user)],
+    session: Annotated[Session, Depends(get_session)],
+) -> StoryOut:
+    _require_moderator(user)
+    row = _require_story(session, story_id)
+    if row["status"] != "published":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Solo se retira una historia publicada")
+    session.execute(
+        text("UPDATE stories SET status = 'pending_review', published_at = NULL WHERE id = :id"),
         {"id": story_id},
     )
     session.commit()

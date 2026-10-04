@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Session
 
-from voces.schemas import CATEGORIES, LICENSES, StoryIn, StoryOut
+from voces.schemas import CATEGORIES, LICENSES, StoryIn, StoryOut, StoryPatch
 
 STORY_COLUMNS = """
     s.id, s.title, s.body, s.transcript, s.narrator_name, s.narrator_relation,
@@ -35,27 +35,46 @@ def validate_story(payload: StoryIn) -> None:
 def create_story(session: Session, author_id: UUID, payload: StoryIn) -> UUID:
     validate_story(payload)
     place = payload.place
-    place_id = session.execute(
+    existing = session.execute(
         text(
             """
-            INSERT INTO places (name, place_type, description, location, created_by)
-            VALUES (
-                :name, :place_type, :description,
-                ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
-                :created_by
-            )
-            RETURNING id
+            SELECT id
+            FROM places
+            WHERE lower(btrim(name)) = lower(btrim(:name))
+              AND ST_DWithin(
+                    location,
+                    ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+                    30
+                  )
+            LIMIT 1
             """
         ),
-        {
-            "name": place.name,
-            "place_type": place.place_type,
-            "description": place.description,
-            "lng": place.longitude,
-            "lat": place.latitude,
-            "created_by": author_id,
-        },
-    ).scalar_one()
+        {"name": place.name, "lng": place.longitude, "lat": place.latitude},
+    ).scalar()
+    if existing is not None:
+        place_id = existing
+    else:
+        place_id = session.execute(
+            text(
+                """
+                INSERT INTO places (name, place_type, description, location, created_by)
+                VALUES (
+                    :name, :place_type, :description,
+                    ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+                    :created_by
+                )
+                RETURNING id
+                """
+            ),
+            {
+                "name": place.name.strip(),
+                "place_type": place.place_type,
+                "description": place.description,
+                "lng": place.longitude,
+                "lat": place.latitude,
+                "created_by": author_id,
+            },
+        ).scalar_one()
     story_id = session.execute(
         text(
             """
@@ -158,6 +177,40 @@ def fetch_mine(session: Session, author_id: UUID) -> list[dict]:
             """
         ),
         {"author_id": author_id},
+    ).mappings()
+    return [dict(row) for row in rows]
+
+
+def update_story(session: Session, story_id: UUID, author_id: UUID, patch: StoryPatch) -> None:
+    row = fetch_story(session, story_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No está esa historia")
+    if row["author_id"] != author_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo quien la escribió puede corregirla")
+    if row["status"] != "pending_review":
+        raise HTTPException(status.HTTP_409_CONFLICT, "Solo se corrige una historia en revisión")
+    changes = patch.model_dump(exclude_unset=True)
+    if not changes:
+        return
+    assignments = ", ".join(f"{column} = :{column}" for column in changes)
+    session.execute(
+        text(f"UPDATE stories SET {assignments} WHERE id = :id"),
+        {**changes, "id": story_id},
+    )
+    session.commit()
+
+
+def fetch_review(session: Session) -> list[dict]:
+    rows = session.execute(
+        text(
+            f"""
+            SELECT {STORY_COLUMNS}
+            FROM stories s
+            JOIN places p ON p.id = s.place_id
+            WHERE s.status = 'pending_review'
+            ORDER BY s.created_at
+            """
+        )
     ).mappings()
     return [dict(row) for row in rows]
 
