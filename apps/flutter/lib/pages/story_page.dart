@@ -31,12 +31,19 @@ class _StoryPageState extends State<StoryPage> {
     final api = ApiScope.maybeOf(context);
     if (api != null && _api == null) {
       _api = api;
+      api.changes.addListener(_onChanged);
       _fetch();
     }
   }
 
+  /// Si cambia la sesión (por ejemplo, caduca), las acciones se recalculan.
+  void _onChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    _api?.changes.removeListener(_onChanged);
     _energy.dispose();
     super.dispose();
   }
@@ -89,14 +96,14 @@ class _StoryPageState extends State<StoryPage> {
   Future<void> _edit() async {
     final patch = await editStory(context, _story);
     if (patch == null) return;
+    String? changed(String value, String? before) => value == (before ?? '').trim() ? null : value;
+    final title = changed(patch.title, _story.title);
+    final body = changed(patch.body, _story.body);
+    final narrator = changed(patch.narratorName, _story.narratorName);
+    final relation = changed(patch.narratorRelation, _story.narratorRelation);
+    if (title == null && body == null && narrator == null && relation == null) return;
     await _run(
-      (api) => api.updateStory(
-        _story.id,
-        title: patch.title,
-        body: patch.body,
-        narratorName: patch.narratorName,
-        narratorRelation: patch.narratorRelation,
-      ),
+      (api) => api.updateStory(_story.id, title: title, body: body, narratorName: narrator, narratorRelation: relation),
       'Corrección guardada.',
     );
   }
@@ -315,6 +322,7 @@ class _StoryEditorState extends State<_StoryEditor> {
   late final _narrator = TextEditingController(text: widget.story.narratorName ?? '');
   late final _relation = TextEditingController(text: widget.story.narratorRelation ?? '');
   String? _titleError;
+  String? _bodyError;
 
   @override
   void dispose() {
@@ -326,10 +334,12 @@ class _StoryEditorState extends State<_StoryEditor> {
 
   void _save() {
     final title = _title.text.trim();
-    if (title.isEmpty) {
-      setState(() => _titleError = 'Ponle un título, aunque sea corto.');
-      return;
-    }
+    final emptyStory = _body.text.trim().isEmpty && widget.story.mediaUrls.isEmpty;
+    setState(() {
+      _titleError = title.isEmpty ? 'Ponle un título, aunque sea corto.' : null;
+      _bodyError = emptyStory ? 'Sin grabación, hace falta el texto para poder publicarla.' : null;
+    });
+    if (_titleError != null || _bodyError != null) return;
     Navigator.pop<StoryEdit>(context, (
       title: title,
       body: _body.text.trim(),
@@ -348,6 +358,7 @@ class _StoryEditorState extends State<_StoryEditor> {
           TextField(
             controller: _title,
             autofocus: true,
+            maxLength: 180,
             style: text(size: 17),
             onChanged: (_) {
               if (_titleError != null) setState(() => _titleError = null);
@@ -360,17 +371,22 @@ class _StoryEditorState extends State<_StoryEditor> {
             minLines: 4,
             maxLines: 10,
             style: text(size: 16, height: 1.55),
-            decoration: const InputDecoration(labelText: 'Qué se contaba', alignLabelWithHint: true),
+            onChanged: (_) {
+              if (_bodyError != null) setState(() => _bodyError = null);
+            },
+            decoration: InputDecoration(labelText: 'Qué se contaba', alignLabelWithHint: true, errorText: _bodyError),
           ),
           const SizedBox(height: 14),
           TextField(
             controller: _narrator,
+            maxLength: 160,
             style: text(size: 16),
             decoration: const InputDecoration(labelText: 'Nombre de quien la cuenta'),
           ),
           const SizedBox(height: 14),
           TextField(
             controller: _relation,
+            maxLength: 80,
             style: text(size: 16),
             decoration: const InputDecoration(labelText: 'Qué es para ti'),
           ),

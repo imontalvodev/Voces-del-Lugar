@@ -34,10 +34,13 @@ def map_stories(
     east: float,
     north: float,
     session: Annotated[Session, Depends(get_session)],
+    limit: int = 200,
 ) -> list[StoryOut]:
     if west >= east or south >= north:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "El recuadro no es válido")
-    return stories_out(session, fetch_map(session, west, south, east, north))
+    if not 1 <= limit <= 1000:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "El límite tiene que estar entre 1 y 1000")
+    return stories_out(session, fetch_map(session, west, south, east, north, limit))
 
 
 @router.get("/nearby", response_model=list[StoryOut])

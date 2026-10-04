@@ -39,21 +39,24 @@ class HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  int _ticket = 0;
+
   Future<void> reload() async {
     if (!mounted) return;
+    final ticket = ++_ticket;
     setState(() {
       _loading = _stories.isEmpty;
       _error = null;
     });
     try {
       final stories = await widget.api.archive();
-      if (mounted) setState(() => _stories = stories);
+      if (mounted && ticket == _ticket) setState(() => _stories = stories);
     } on ApiException catch (error) {
-      if (mounted) setState(() => _error = error.message);
+      if (mounted && ticket == _ticket) setState(() => _error = error.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'No hay conexión con el archivo.');
+      if (mounted && ticket == _ticket) setState(() => _error = 'No hay conexión con el archivo.');
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && ticket == _ticket) setState(() => _loading = false);
     }
   }
 

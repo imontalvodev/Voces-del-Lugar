@@ -11,7 +11,11 @@ void main() {
 
     test('en web la API está en la misma máquina que sirve la app', () {
       expect(defaultApiBase(Uri.parse('http://192.168.1.40:8080/#/')), 'http://192.168.1.40:8001');
-      expect(defaultApiBase(Uri.parse('https://voces.example.org/')), 'https://voces.example.org:8001');
+    });
+
+    test('por HTTPS la API va por el mismo origen, detrás del proxy', () {
+      expect(defaultApiBase(Uri.parse('https://192.168.1.40:8443/')), 'https://192.168.1.40:8443');
+      expect(defaultApiBase(Uri.parse('https://voces.example.org/')), 'https://voces.example.org');
     });
   });
 

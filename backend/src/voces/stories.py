@@ -125,7 +125,9 @@ def fetch_story(session: Session, story_id: UUID) -> dict | None:
     return dict(row) if row else None
 
 
-def fetch_map(session: Session, west: float, south: float, east: float, north: float) -> list[dict]:
+def fetch_map(
+    session: Session, west: float, south: float, east: float, north: float, limit: int = 200
+) -> list[dict]:
     # Recuadro plano en grados: como geografía, uno de más de 180° de ancho
     # se interpreta por el otro lado del globo y no devuelve nada.
     rows = session.execute(
@@ -140,7 +142,7 @@ def fetch_map(session: Session, west: float, south: float, east: float, north: f
                     ST_MakeEnvelope(:west, :south, :east, :north, 4326)
                   )
             ORDER BY s.published_at DESC
-            LIMIT 200
+            LIMIT :limit
             """
         ),
         {
@@ -148,6 +150,7 @@ def fetch_map(session: Session, west: float, south: float, east: float, north: f
             "south": max(south, -90.0),
             "east": min(east, 180.0),
             "north": min(north, 90.0),
+            "limit": limit,
         },
     ).mappings()
     return [dict(row) for row in rows]
