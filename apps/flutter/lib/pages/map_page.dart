@@ -7,6 +7,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
+import 'package:voces/locate.dart';
 import 'package:voces/pages/story_page.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/dusk_tiles.dart';
@@ -20,10 +21,11 @@ const _home = LatLng(40.416, -3.703);
 const dockClearance = 104.0;
 
 class MapPage extends StatefulWidget {
-  const MapPage({super.key, required this.api, required this.onLeaveStory});
+  const MapPage({super.key, required this.api, required this.onLeaveStory, this.locate = deviceLocation});
 
   final VocesApi api;
-  final void Function(LatLng point) onLeaveStory;
+  final void Function(LatLng point, [String? placeName]) onLeaveStory;
+  final Future<LatLng?> Function({bool ask}) locate;
 
   @override
   State<MapPage> createState() => MapPageState();
@@ -44,9 +46,26 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   bool _ready = false;
   bool _placing = false;
   bool _loading = false;
+  bool _locating = false;
+  List<PlaceHit> _places = [];
+  bool _searchingPlaces = false;
+  Timer? _placeDebounce;
+  int _placeQuery = 0;
+
+  /// Cuenta los movimientos que hace quien mira: si se mueve mientras se
+  /// espera la posición, no se le arrastra.
+  int _moves = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.api.changes.addListener(reload);
+  }
 
   @override
   void dispose() {
+    widget.api.changes.removeListener(reload);
+    _placeDebounce?.cancel();
     _debounce?.cancel();
     _sheet.dispose();
     _flight.dispose();
@@ -95,6 +114,71 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     }
   }
 
+  /// Busca ciudades y sitios por nombre mientras se escribe.
+  void _searchPlaces(String value) {
+    _placeDebounce?.cancel();
+    final query = value.trim();
+    final ticket = ++_placeQuery;
+    if (query.length < 3) {
+      setState(() {
+        _places = [];
+        _searchingPlaces = false;
+      });
+      return;
+    }
+    setState(() => _searchingPlaces = true);
+    _placeDebounce = Timer(const Duration(milliseconds: 450), () async {
+      List<PlaceHit> hits;
+      try {
+        hits = await widget.api.searchPlaces(query);
+      } catch (_) {
+        hits = [];
+      }
+      if (!mounted || ticket != _placeQuery) return;
+      setState(() {
+        _places = hits;
+        _searchingPlaces = false;
+      });
+    });
+  }
+
+  void _goToPlace(PlaceHit hit) {
+    _placeQuery++;
+    _query.clear();
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _places = [];
+      _searchingPlaces = false;
+      _selectedId = null;
+    });
+    _flyTo(hit.point, 14);
+  }
+
+  /// Al abrir, si ya hay permiso, el mapa empieza donde está quien mira.
+  Future<void> _startNearUser() async {
+    final moves = _moves;
+    final point = await widget.locate(ask: false);
+    if (!mounted || point == null || moves != _moves) return;
+    _flyTo(point, 14);
+  }
+
+  Future<void> _goToUser() async {
+    if (_locating) return;
+    setState(() => _locating = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final moves = ++_moves;
+    final point = await widget.locate(ask: true);
+    if (!mounted) return;
+    setState(() => _locating = false);
+    if (point == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No se puede saber dónde estás. Busca tu pueblo o tu barrio por el nombre.')),
+      );
+      return;
+    }
+    if (moves == _moves) _flyTo(point, 15);
+  }
+
   void _scheduleReload() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 320), reload);
@@ -134,6 +218,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 
   void _select(StoryPin story) {
+    _moves++;
     setState(() {
       _selectedId = story.id;
       _draft = null;
@@ -153,6 +238,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 
   void _drop(LatLng point) {
+    _moves++;
     setState(() {
       _draft = point;
       _placing = false;
@@ -162,6 +248,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 
   void _zoom(double delta) {
+    _moves++;
     final camera = _map.camera;
     _flyTo(camera.center, (camera.zoom + delta).clamp(3.0, 18.0));
   }
@@ -185,7 +272,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
       error: _error,
       onSelect: _select,
       onOpen: _open,
-      onWrite: (point) => widget.onLeaveStory(point),
+      onWrite: (point, [placeName]) => widget.onLeaveStory(point, placeName),
       onClearDraft: () => setState(() => _draft = null),
       onClearSelection: () => setState(() => _selectedId = null),
       onRetry: reload,
@@ -207,9 +294,18 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
                   constraints: BoxConstraints(maxWidth: wide ? 400 : 640),
                   child: _SearchBar(
                     controller: _query,
+                    places: _places,
+                    searchingPlaces: _searchingPlaces,
+                    onPlace: _goToPlace,
+                    onSubmitted: () {
+                      if (_places.isNotEmpty) _goToPlace(_places.first);
+                    },
                     categories: ({for (final s in _stories) s.category}.toList()..sort()),
                     category: _category,
-                    onChanged: () => setState(() {}),
+                    onChanged: () {
+                      setState(() {});
+                      _searchPlaces(_query.text);
+                    },
                     onCategory: (value) => setState(() => _category = value),
                   ),
                 ),
@@ -231,7 +327,11 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
                 const SizedBox(height: 8),
                 GlassIconButton(icon: LucideIcons.minus, tooltip: 'Alejar', onPressed: () => _zoom(-1)),
                 const SizedBox(height: 8),
-                GlassIconButton(icon: LucideIcons.locateFixed, tooltip: 'Volver a Madrid', onPressed: () => _flyTo(_home, 13)),
+                GlassIconButton(
+                  icon: _locating ? LucideIcons.loaderCircle : LucideIcons.locateFixed,
+                  tooltip: 'Ir a donde estoy',
+                  onPressed: _locating ? null : _goToUser,
+                ),
               ],
             ),
           ),
@@ -300,6 +400,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
         onMapReady: () {
           _ready = true;
           reload();
+          _startNearUser();
         },
         onTap: (_, point) {
           if (_placing || _selectedId == null) {
@@ -311,6 +412,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
         onLongPress: (_, point) => _drop(point),
         onMapEvent: (event) {
           if (event.source != MapEventSource.mapController && event.source != MapEventSource.nonRotatedSizeChange) {
+            _moves++;
             _scheduleReload();
           }
         },
@@ -319,8 +421,8 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
         duskTiles(),
         MarkerLayer(
           markers: [
-            for (final story in visible)
-              if (story.id != _selectedId)
+            for (final story in onePinPerPlace(visible))
+              if (story.placeId != selected?.placeId)
                 Marker(
                   point: story.point,
                   width: 44,
@@ -518,6 +620,10 @@ class _PlaceToggle extends StatelessWidget {
 class _SearchBar extends StatelessWidget {
   const _SearchBar({
     required this.controller,
+    required this.places,
+    required this.searchingPlaces,
+    required this.onPlace,
+    required this.onSubmitted,
     required this.categories,
     required this.category,
     required this.onChanged,
@@ -525,6 +631,10 @@ class _SearchBar extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final List<PlaceHit> places;
+  final bool searchingPlaces;
+  final ValueChanged<PlaceHit> onPlace;
+  final VoidCallback onSubmitted;
   final List<String> categories;
   final String? category;
   final VoidCallback onChanged;
@@ -547,9 +657,11 @@ class _SearchBar extends StatelessWidget {
                 child: TextField(
                   controller: controller,
                   onChanged: (_) => onChanged(),
+                  onSubmitted: (_) => onSubmitted(),
+                  textInputAction: TextInputAction.search,
                   style: text(size: 15.5),
                   decoration: const InputDecoration(
-                    hintText: 'Buscar un sitio, una persona, un recuerdo',
+                    hintText: 'Busca una ciudad, un sitio, una persona',
                     filled: false,
                     border: InputBorder.none,
                     enabledBorder: InputBorder.none,
@@ -570,6 +682,53 @@ class _SearchBar extends StatelessWidget {
             ],
           ),
         ),
+        if (places.isNotEmpty || (searchingPlaces && controller.text.trim().length >= 3)) ...[
+          const SizedBox(height: 8),
+          Glass(
+            radius: 22,
+            tint: Palette.glassStrong.withValues(alpha: 0.82),
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 6, 18, 4),
+                  child: Text(
+                    searchingPlaces && places.isEmpty ? 'Buscando lugares…' : 'Ir a un lugar',
+                    style: text(size: 12.5, weight: FontWeight.w600, color: Palette.haze),
+                  ),
+                ),
+                for (final hit in places)
+                  Pressable(
+                    onTap: () => onPlace(hit),
+                    lift: false,
+                    semanticLabel: 'Ir a ${hit.label}',
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+                      child: ExcludeSemantics(
+                        child: Row(
+                          children: [
+                            const Icon(LucideIcons.navigation, size: 16, color: Palette.lamp),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(hit.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 15, weight: FontWeight.w600, height: 1.25)),
+                                  if (hit.context.isNotEmpty)
+                                    Text(hit.context, maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 12.5, color: Palette.haze, height: 1.3)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
         if (categories.length > 1) ...[
           const SizedBox(height: 10),
           SingleChildScrollView(
@@ -648,21 +807,31 @@ class _Panel extends StatelessWidget {
   final String? error;
   final ValueChanged<StoryPin> onSelect;
   final ValueChanged<StoryPin> onOpen;
-  final ValueChanged<LatLng> onWrite;
+  final void Function(LatLng point, [String? placeName]) onWrite;
   final VoidCallback onClearDraft;
   final VoidCallback onClearSelection;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
+    final here = [
+      for (final s in visible)
+        if (selected != null && s.placeId == selected!.placeId && s.id != selected!.id) s,
+    ];
     final others = [
       for (final s in visible)
-        if (s.id != selected?.id) s,
+        if (s.id != selected?.id && !here.contains(s)) s,
     ];
     final focus = draft != null
         ? _DraftFocus(key: const ValueKey('draft'), point: draft!, onWrite: () => onWrite(draft!), onClear: onClearDraft)
         : selected != null
-        ? _StoryFocus(key: ValueKey(selected!.id), story: selected!, onOpen: () => onOpen(selected!), onClose: onClearSelection)
+        ? _StoryFocus(
+            key: ValueKey(selected!.id),
+            story: selected!,
+            onOpen: () => onOpen(selected!),
+            onClose: onClearSelection,
+            onWriteHere: () => onWrite(selected!.point, selected!.placeName),
+          )
         : null;
     return CustomScrollView(
       primary: true,
@@ -706,7 +875,25 @@ class _Panel extends StatelessWidget {
               child: Notice(message: error!, action: 'Reintentar', onAction: onRetry),
             ),
           ),
-        if (focus != null)
+        if (here.isNotEmpty) ...[
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
+            sliver: SliverToBoxAdapter(
+              child: Text(
+                here.length == 1 ? 'Otra historia en este mismo sitio' : '${here.length} historias más en este mismo sitio',
+                style: text(size: 14, weight: FontWeight.w600, color: Palette.lamp),
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            sliver: SliverList.builder(
+              itemCount: here.length,
+              itemBuilder: (context, index) => _Row(story: here[index], selected: false, onTap: () => onSelect(here[index])),
+            ),
+          ),
+        ],
+        if (focus != null && others.isNotEmpty)
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
             sliver: SliverToBoxAdapter(
@@ -765,11 +952,12 @@ class _Heading extends StatelessWidget {
 }
 
 class _StoryFocus extends StatelessWidget {
-  const _StoryFocus({super.key, required this.story, required this.onOpen, required this.onClose});
+  const _StoryFocus({super.key, required this.story, required this.onOpen, required this.onClose, required this.onWriteHere});
 
   final StoryPin story;
   final VoidCallback onOpen;
   final VoidCallback onClose;
+  final VoidCallback onWriteHere;
 
   @override
   Widget build(BuildContext context) {
@@ -808,6 +996,14 @@ class _StoryFocus extends StatelessWidget {
           icon: story.mediaUrls.isNotEmpty ? LucideIcons.headphones : LucideIcons.bookOpenText,
           onPressed: onOpen,
           expand: true,
+        ),
+        const SizedBox(height: 6),
+        Center(
+          child: TextButton.icon(
+            onPressed: onWriteHere,
+            icon: const Icon(LucideIcons.mic, size: 17),
+            label: const Text('Contar otra historia de este sitio'),
+          ),
         ),
       ],
     );

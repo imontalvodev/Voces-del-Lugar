@@ -29,12 +29,20 @@ class HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    widget.api.changes.addListener(reload);
     reload();
   }
 
+  @override
+  void dispose() {
+    widget.api.changes.removeListener(reload);
+    super.dispose();
+  }
+
   Future<void> reload() async {
+    if (!mounted) return;
     setState(() {
-      _loading = true;
+      _loading = _stories.isEmpty;
       _error = null;
     });
     try {

@@ -15,10 +15,13 @@ import 'package:voces/ui/sky.dart';
 import 'package:voces/ui/tokens.dart';
 
 class ComposePage extends StatefulWidget {
-  const ComposePage({super.key, required this.api, required this.point});
+  const ComposePage({super.key, required this.api, required this.point, this.placeName});
 
   final VocesApi api;
   final LatLng point;
+
+  /// Si se cuenta otra historia de un sitio que ya está en el mapa, su nombre.
+  final String? placeName;
 
   @override
   State<ComposePage> createState() => _ComposePageState();
@@ -31,7 +34,10 @@ class _ComposePageState extends State<ComposePage> {
   final _body = TextEditingController();
   final _narrator = TextEditingController();
   final _relation = TextEditingController();
-  final _place = TextEditingController();
+  late final _place = TextEditingController(text: widget.placeName ?? '');
+  String _category = 'anecdota';
+  StoryPin? _created;
+  bool _audioSent = false;
   bool _deceased = false;
   bool _consent = false;
   bool _publish = true;
@@ -124,7 +130,9 @@ class _ComposePageState extends State<ComposePage> {
       _formError = null;
     });
     try {
-      final story = await widget.api.createStory(
+      // Si un intento anterior ya guardó la historia y falló al subir el audio,
+      // se reintenta solo lo que faltaba: así no quedan historias repetidas.
+      final story = _created ??= await widget.api.createStory(
         title: _title.text.trim(),
         body: _body.text.trim(),
         narratorName: _narrator.text.trim(),
@@ -133,11 +141,15 @@ class _ComposePageState extends State<ComposePage> {
         license: _license,
         placeName: _place.text.trim(),
         point: widget.point,
+        category: _category,
       );
-      if (_clip != null) {
-        await widget.api.uploadAudio(story.id, _clip!.filename, _clip!.bytes);
-      } else if (_file != null) {
-        await widget.api.uploadAudio(story.id, _file!.name, await _file!.readAsBytes());
+      if (!_audioSent) {
+        if (_clip != null) {
+          await widget.api.uploadAudio(story.id, _clip!.filename, _clip!.bytes);
+        } else if (_file != null) {
+          await widget.api.uploadAudio(story.id, _file!.name, await _file!.readAsBytes());
+        }
+        _audioSent = true;
       }
       final publish = _publish && widget.api.account!.canModerate;
       if (publish) await widget.api.publish(story.id);
@@ -293,6 +305,17 @@ class _ComposePageState extends State<ComposePage> {
                 if (_titleError != null) setState(() => _titleError = null);
               },
               decoration: InputDecoration(labelText: 'Título', hintText: 'La noche que se heló la fuente', errorText: _titleError),
+            ),
+            const SizedBox(height: 18),
+            Text('¿Qué es?', style: text(size: 14, weight: FontWeight.w600, color: Palette.haze)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final c in storyCategories)
+                  FilterPill(label: categoryLabel(c), selected: _category == c, onTap: () => setState(() => _category = c)),
+              ],
             ),
             const SizedBox(height: 24),
             _ModeSwitch(writing: _writing, onChanged: (value) => setState(() => _writing = value)),
