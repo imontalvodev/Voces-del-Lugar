@@ -127,6 +127,8 @@ def fetch_story(session: Session, story_id: UUID) -> dict | None:
 
 
 def fetch_map(session: Session, west: float, south: float, east: float, north: float) -> list[dict]:
+    # Recuadro plano en grados: como geografía, uno de más de 180° de ancho
+    # se interpreta por el otro lado del globo y no devuelve nada.
     rows = session.execute(
         text(
             f"""
@@ -136,14 +138,19 @@ def fetch_map(session: Session, west: float, south: float, east: float, north: f
             JOIN users u ON u.id = s.author_id
             WHERE s.status = 'published'
               AND ST_Intersects(
-                    p.location,
-                    ST_MakeEnvelope(:west, :south, :east, :north, 4326)::geography
+                    p.location::geometry,
+                    ST_MakeEnvelope(:west, :south, :east, :north, 4326)
                   )
             ORDER BY s.published_at DESC
             LIMIT 200
             """
         ),
-        {"west": west, "south": south, "east": east, "north": north},
+        {
+            "west": max(west, -180.0),
+            "south": max(south, -90.0),
+            "east": min(east, 180.0),
+            "north": min(north, 90.0),
+        },
     ).mappings()
     return [dict(row) for row in rows]
 
