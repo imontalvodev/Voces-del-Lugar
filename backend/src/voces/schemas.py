@@ -111,3 +111,4 @@ class PlaceHit(BaseModel):
     label: str
     latitude: float
     longitude: float
+    kind: str | None = None

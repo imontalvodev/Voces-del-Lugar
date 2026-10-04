@@ -17,12 +17,18 @@ def test_search_places_reads_nominatim_json():
         )
         return httpx.Response(
             200,
-            json=[{"display_name": "Cáceres, España", "lat": "39.475", "lon": "-6.372"}],
+            json=[
+                {"display_name": "Cáceres, España", "lat": "39.475", "lon": "-6.372", "addresstype": "city"},
+                {"display_name": "Cáceres, Extremadura", "lat": "39.5", "lon": "-6.1"},
+            ],
         )
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
     hits = search_places("Cáceres", client)
-    assert hits == [PlaceHit(label="Cáceres, España", latitude=39.475, longitude=-6.372)]
+    assert hits == [
+        PlaceHit(label="Cáceres, España", latitude=39.475, longitude=-6.372, kind="city"),
+        PlaceHit(label="Cáceres, Extremadura", latitude=39.5, longitude=-6.1, kind=None),
+    ]
 
 
 def test_search_places_rejects_one_letter():
@@ -34,13 +40,13 @@ def test_search_places_rejects_one_letter():
 def test_geocode_endpoint_returns_hits(monkeypatch):
     def fake_search(query: str, client: object) -> list[PlaceHit]:
         assert query == "Cáceres"
-        return [PlaceHit(label="Cáceres, España", latitude=39.475, longitude=-6.372)]
+        return [PlaceHit(label="Cáceres, España", latitude=39.475, longitude=-6.372, kind="city")]
 
     monkeypatch.setattr("voces.routers.geocode.search_places", fake_search)
     response = TestClient(app).get("/api/v1/geocode", params={"q": "Cáceres"})
     assert response.status_code == 200
     assert response.json() == [
-        {"label": "Cáceres, España", "latitude": 39.475, "longitude": -6.372}
+        {"label": "Cáceres, España", "latitude": 39.475, "longitude": -6.372, "kind": "city"}
     ]
 
 
