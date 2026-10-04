@@ -276,6 +276,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
       onClearDraft: () => setState(() => _draft = null),
       onClearSelection: () => setState(() => _selectedId = null),
       onRetry: reload,
+      searching: _query.text.trim().isNotEmpty,
     );
 
     return Stack(
@@ -687,7 +688,7 @@ class _SearchBar extends StatelessWidget {
           const SizedBox(height: 8),
           Glass(
             radius: 22,
-            tint: Palette.glassStrong.withValues(alpha: 0.82),
+            tint: Palette.glassStrong.withValues(alpha: 0.94),
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -797,6 +798,7 @@ class _Panel extends StatelessWidget {
     required this.onClearDraft,
     required this.onClearSelection,
     required this.onRetry,
+    required this.searching,
   });
 
   final List<StoryPin> visible;
@@ -812,6 +814,7 @@ class _Panel extends StatelessWidget {
   final VoidCallback onClearDraft;
   final VoidCallback onClearSelection;
   final VoidCallback onRetry;
+  final bool searching;
 
   @override
   Widget build(BuildContext context) {
@@ -906,7 +909,9 @@ class _Panel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
             sliver: SliverToBoxAdapter(
               child: Text(
-                'Aquí no hay historias con esa búsqueda. Aleja el mapa o toca un sitio para contar la primera.',
+                searching
+                    ? 'Ninguna historia de esta vista coincide. Si buscas un pueblo o una ciudad, elígelo en la lista de arriba para ir allí.'
+                    : 'Aquí todavía no hay historias. Aleja el mapa o toca un sitio para contar la primera.',
                 style: text(size: 14.5, color: Palette.haze),
               ),
             ),
