@@ -43,10 +43,10 @@ def upload_audio(
         raise HTTPException(status.HTTP_409_CONFLICT, "Esta historia ya no admite audio")
     content_type = (file.content_type or "").split(";")[0].strip().lower()
     if content_type not in AUDIO_TYPES:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El archivo tiene que ser un audio")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "El archivo tiene que ser un audio")
     payload = file.file.read(settings.max_audio_bytes + 1)
     if not payload:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "El audio está vacío")
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "El audio está vacío")
     if len(payload) > settings.max_audio_bytes:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "El audio pasa de 25 MB")
 
