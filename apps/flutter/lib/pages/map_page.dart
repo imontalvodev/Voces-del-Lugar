@@ -282,38 +282,6 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
       children: [
         Positioned.fill(child: _canvas(visible)),
         Positioned(
-          left: 16,
-          right: 16,
-          top: 0,
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Align(
-                alignment: wide ? Alignment.topLeft : Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: wide ? 400 : 640),
-                  child: _SearchBar(
-                    controller: _query,
-                    places: _places,
-                    searchingPlaces: _searchingPlaces,
-                    onPlace: _goToPlace,
-                    onSubmitted: () {
-                      if (_places.isNotEmpty) _goToPlace(_places.first);
-                    },
-                    categories: ({for (final s in _stories) s.category}.toList()..sort()),
-                    category: _category,
-                    onChanged: () {
-                      setState(() {});
-                      _searchPlaces(_query.text);
-                    },
-                    onCategory: (value) => setState(() => _category = value),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
           right: 16,
           top: 0,
           bottom: wide ? dockClearance : size.height * 0.4,
@@ -383,6 +351,39 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
           )
         else
           _MobileSheet(controller: _sheet, child: panel),
+        // Encima del panel: las sugerencias de lugares caen sobre él.
+        Positioned(
+          left: 16,
+          right: 16,
+          top: 0,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Align(
+                alignment: wide ? Alignment.topLeft : Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: wide ? 400 : 640),
+                  child: _SearchBar(
+                    controller: _query,
+                    places: _places,
+                    searchingPlaces: _searchingPlaces,
+                    onPlace: _goToPlace,
+                    onSubmitted: () {
+                      if (_places.isNotEmpty) _goToPlace(_places.first);
+                    },
+                    categories: ({for (final s in _stories) s.category}.toList()..sort()),
+                    category: _category,
+                    onChanged: () {
+                      setState(() {});
+                      _searchPlaces(_query.text);
+                    },
+                    onCategory: (value) => setState(() => _category = value),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -715,8 +716,8 @@ class _SearchBar extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(hit.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 15, weight: FontWeight.w600, height: 1.25)),
-                                  if (hit.context.isNotEmpty)
-                                    Text(hit.context, maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 12.5, color: Palette.haze, height: 1.3)),
+                                  if (hit.context.isNotEmpty || hit.kindLabel.isNotEmpty)
+                                    Text([hit.kindLabel, hit.context].where((p) => p.isNotEmpty).join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 12.5, color: Palette.haze, height: 1.3)),
                                 ],
                               ),
                             ),

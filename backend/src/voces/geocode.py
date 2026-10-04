@@ -23,6 +23,7 @@ def search_places(query: str, client: httpx.Client) -> list[PlaceHit]:
                 label=row["display_name"],
                 latitude=float(row["lat"]),
                 longitude=float(row["lon"]),
+                kind=row.get("addresstype"),
             )
         )
     return hits
