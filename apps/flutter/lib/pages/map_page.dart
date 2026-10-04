@@ -37,6 +37,8 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   late final AnimationController _flight = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
   VoidCallback? _flightStep;
   final _sheet = DraggableScrollableController();
+  final _panelScroll = ScrollController();
+  ScrollController? _sheetScroll;
   Timer? _debounce;
   List<StoryPin> _stories = [];
   String? _selectedId;
@@ -68,6 +70,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     _placeDebounce?.cancel();
     _debounce?.cancel();
     _sheet.dispose();
+    _panelScroll.dispose();
     _flight.dispose();
     _query.dispose();
     super.dispose();
@@ -226,8 +229,14 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
       ..forward(from: 0).whenComplete(_scheduleReload);
   }
 
-  /// En móvil, abre la hoja lo justo para que se vea la acción principal.
+  /// En móvil, abre la hoja lo justo para que se vea la acción principal. En
+  /// los dos casos la lista vuelve arriba, donde aparece lo elegido.
   void _raiseSheet() {
+    for (final scroll in [_panelScroll, _sheetScroll]) {
+      if (scroll != null && scroll.hasClients && scroll.offset > 0) {
+        scroll.animateTo(0, duration: Motion.of(context, Motion.settle), curve: Motion.emphasized);
+      }
+    }
     if (!_sheet.isAttached || _sheet.size >= _sheetFocus) return;
     _sheet.animateTo(_sheetFocus, duration: Motion.of(context, Motion.settle), curve: Motion.emphasized);
   }
@@ -363,10 +372,14 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
             top: 150,
             bottom: dockClearance,
             width: 400,
-            child: Glass(radius: 26, tint: Palette.glassStrong.withValues(alpha: 0.55), child: panel),
+            child: Glass(
+              radius: 26,
+              tint: Palette.glassStrong.withValues(alpha: 0.55),
+              child: PrimaryScrollController(controller: _panelScroll, child: panel),
+            ),
           )
         else
-          _MobileSheet(controller: _sheet, child: panel),
+          _MobileSheet(controller: _sheet, onScroll: (scroll) => _sheetScroll = scroll, child: panel),
         // Encima del panel: las sugerencias de lugares caen sobre él.
         Positioned(
           left: 16,
@@ -771,9 +784,10 @@ const _sheetRest = 0.36;
 const _sheetFocus = 0.66;
 
 class _MobileSheet extends StatelessWidget {
-  const _MobileSheet({required this.controller, required this.child});
+  const _MobileSheet({required this.controller, required this.onScroll, required this.child});
 
   final DraggableScrollableController controller;
+  final ValueChanged<ScrollController> onScroll;
   final Widget child;
 
   @override
@@ -788,6 +802,7 @@ class _MobileSheet extends StatelessWidget {
       snap: true,
       snapSizes: [math.max(min, _sheetRest), _sheetFocus],
       builder: (context, scroll) {
+        onScroll(scroll);
         return Glass(
           radius: 30,
           tint: Palette.glassStrong.withValues(alpha: 0.7),
