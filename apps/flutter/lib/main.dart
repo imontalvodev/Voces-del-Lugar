@@ -29,20 +29,23 @@ class _VocesAppState extends State<VocesApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Voces del Lugar',
-      debugShowCheckedModeBanner: false,
-      theme: vocesTheme(),
-      home: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 600),
-        child: _ready
-            ? AppShell(api: _api)
-            : Scaffold(
-                backgroundColor: Palette.night,
-                body: Sky(
-                  child: Center(child: Text('Voces del Lugar', style: display(40))),
+    return ApiScope(
+      api: _api,
+      child: MaterialApp(
+        title: 'Voces del Lugar',
+        debugShowCheckedModeBanner: false,
+        theme: vocesTheme(),
+        home: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 600),
+          child: _ready
+              ? AppShell(api: _api)
+              : Scaffold(
+                  backgroundColor: Palette.night,
+                  body: Sky(
+                    child: Center(child: Text('Voces del Lugar', style: display(40))),
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }

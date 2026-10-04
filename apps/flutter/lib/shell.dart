@@ -22,6 +22,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _index = 0;
   LatLng? _pendingPoint;
+  String? _pendingPlace;
   final _homeKey = GlobalKey<HomePageState>();
   final _mapKey = GlobalKey<MapPageState>();
   final _accountKey = GlobalKey<AccountPageState>();
@@ -31,21 +32,23 @@ class _AppShellState extends State<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _mapKey.currentState?.beginPlacing());
   }
 
-  Future<void> _leaveStory(LatLng point) async {
+  Future<void> _leaveStory(LatLng point, [String? placeName]) async {
     if (widget.api.account == null) {
       _pendingPoint = point;
+      _pendingPlace = placeName;
       setState(() => _index = 2);
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Entra o crea una cuenta y seguimos con la historia de ese sitio.')));
       return;
     }
     _pendingPoint = null;
+    _pendingPlace = null;
     final created = await Navigator.push<bool>(
       context,
       PageRouteBuilder<bool>(
         transitionDuration: Motion.of(context, const Duration(milliseconds: 520)),
         reverseTransitionDuration: Motion.of(context, const Duration(milliseconds: 360)),
-        pageBuilder: (_, _, _) => ComposePage(api: widget.api, point: point),
+        pageBuilder: (_, _, _) => ComposePage(api: widget.api, point: point, placeName: placeName),
         transitionsBuilder: (context, animation, _, child) {
           final curved = CurvedAnimation(parent: animation, curve: Motion.out, reverseCurve: Curves.easeIn);
           return FadeTransition(
@@ -58,11 +61,7 @@ class _AppShellState extends State<AppShell> {
         },
       ),
     );
-    if (created == true) {
-      _homeKey.currentState?.reload();
-      _mapKey.currentState?.reload();
-      _accountKey.currentState?.reload();
-    }
+    if (created == true) _mapKey.currentState?.reload();
   }
 
   @override
@@ -77,7 +76,7 @@ class _AppShellState extends State<AppShell> {
         onChanged: () {
           setState(() {});
           final pending = _pendingPoint;
-          if (pending != null && widget.api.account != null) _leaveStory(pending);
+          if (pending != null && widget.api.account != null) _leaveStory(pending, _pendingPlace);
         },
       ),
     ];

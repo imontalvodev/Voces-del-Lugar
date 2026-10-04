@@ -27,6 +27,9 @@ String roleLabel(String role) {
   };
 }
 
+/// Las categorías que acepta la API, en el orden en que se ofrecen.
+const storyCategories = ['anecdota', 'leyenda', 'oficio', 'tradicion', 'evento', 'otro'];
+
 String categoryLabel(String category) {
   return switch (category) {
     'anecdota' => 'Anécdota',

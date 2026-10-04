@@ -4,8 +4,15 @@ import 'package:voces/ui/kit.dart';
 import 'package:voces/ui/voice_terrain.dart';
 
 void main() {
-  test('la API local es el valor por defecto', () {
-    expect(apiBase, 'http://localhost:8001');
+  group('defaultApiBase', () {
+    test('fuera del navegador la API está en esta máquina', () {
+      expect(defaultApiBase(Uri.parse('file:///app')), 'http://localhost:8001');
+    });
+
+    test('en web la API está en la misma máquina que sirve la app', () {
+      expect(defaultApiBase(Uri.parse('http://192.168.1.40:8080/#/')), 'http://192.168.1.40:8001');
+      expect(defaultApiBase(Uri.parse('https://voces.example.org/')), 'https://voces.example.org:8001');
+    });
   });
 
   group('audioType', () {

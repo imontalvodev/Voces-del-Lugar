@@ -111,3 +111,75 @@ class _StoryCardState extends State<StoryCard> {
     );
   }
 }
+
+/// Historia que espera revisión: se puede escuchar entera en su ficha o
+/// decidir desde aquí.
+class ReviewCard extends StatelessWidget {
+  const ReviewCard({super.key, required this.story, required this.onPublish, required this.onReject, this.busy = false});
+
+  final StoryPin story;
+  final VoidCallback onPublish;
+  final VoidCallback onReject;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasAudio = story.mediaUrls.isNotEmpty;
+    final summary = excerpt(story.body, max: 140);
+    return Glass(
+      radius: 24,
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(LucideIcons.mapPin, size: 15, color: Palette.lamp),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  story.placeName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text(size: 13.5, weight: FontWeight.w600, color: Palette.lamp, height: 1.2),
+                ),
+              ),
+              if (hasAudio)
+                const Tooltip(
+                  message: 'Tiene grabación',
+                  child: Icon(LucideIcons.audioWaveform, size: 18, color: Palette.haze),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(story.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: display(28, height: 1.05)),
+          const SizedBox(height: 6),
+          Text(narratorLine(story), maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 14, color: Palette.haze)),
+          const SizedBox(height: 10),
+          Expanded(
+            child: summary.isEmpty
+                ? VoicePrint(seed: story.id, bars: 38, height: 30, dim: !hasAudio)
+                : Text(summary, overflow: TextOverflow.fade, style: text(size: 14.5, color: Palette.bone.withValues(alpha: 0.82))),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: LampButton(label: 'Publicar', icon: LucideIcons.check, busy: busy, expand: true, onPressed: onPublish),
+              ),
+              const SizedBox(width: 8),
+              GlassIconButton(icon: LucideIcons.x, tooltip: 'Rechazar', onPressed: busy ? null : onReject, size: 54),
+              const SizedBox(width: 8),
+              GlassIconButton(
+                icon: hasAudio ? LucideIcons.headphones : LucideIcons.bookOpenText,
+                tooltip: hasAudio ? 'Escucharla entera' : 'Leerla entera',
+                size: 54,
+                onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => StoryPage(story: story))),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
