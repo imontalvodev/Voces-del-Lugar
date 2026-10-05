@@ -15,4 +15,4 @@ RUN flutter build web --release --dart-define=API_BASE=origin
 
 FROM caddy:2
 COPY --from=build /app/build/web /srv
-COPY Caddyfile /etc/caddy/Caddyfile
+COPY Caddyfile tls-none.conf tls-internal.conf /etc/caddy/

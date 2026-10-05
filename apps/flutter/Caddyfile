@@ -1,6 +1,9 @@
 # SITE_ADDRESS=:80 sirve HTTP plano, para ir detrás de otro proxy que ya pone
 # el HTTPS. Con un dominio (voces.example) Caddy pide su propio certificado.
+# SITE_ADDRESS=https:// con TLS_MODE=internal sirve HTTPS en cualquier nombre o
+# IP con un certificado propio de Caddy, sin dominio (el navegador avisa una vez).
 {$SITE_ADDRESS::80} {
+	import /etc/caddy/tls-{$TLS_MODE:none}.conf
 	encode zstd gzip
 	handle /api/* {
 		reverse_proxy api:8000
