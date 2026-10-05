@@ -10,6 +10,12 @@
 	}
 	handle {
 		root * /srv
+		# Lo que cambia en cada despliegue se revalida (ETag, barato si no cambió);
+		# el resto se guarda una hora, así el wasm de 3 MB no se pide en cada visita.
+		@revalidar path / /index.html /main.dart.js /flutter_bootstrap.js /flutter_service_worker.js /version.json /manifest.json
+		header @revalidar Cache-Control "no-cache"
+		@estatico path /canvaskit/* /assets/* /icons/* /favicon.png
+		header @estatico Cache-Control "public, max-age=3600"
 		try_files {path} /index.html
 		file_server
 	}
