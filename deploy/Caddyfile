@@ -1,3 +1,0 @@
-{$VOCES_DOMAIN} {
-	reverse_proxy api:8000
-}
