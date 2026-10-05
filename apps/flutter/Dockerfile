@@ -11,7 +11,7 @@ WORKDIR /app
 COPY pubspec.yaml pubspec.lock ./
 RUN flutter pub get
 COPY . .
-RUN flutter build web --release
+RUN flutter build web --release --dart-define=API_BASE=origin
 
 FROM caddy:2
 COPY --from=build /app/build/web /srv

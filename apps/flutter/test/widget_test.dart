@@ -19,6 +19,20 @@ void main() {
     });
   });
 
+  group('resolveApiBase', () {
+    test('origin usa la misma dirección que sirve la app, también por HTTP', () {
+      expect(resolveApiBase('origin', Uri.parse('http://littlepc:58062/')), 'http://littlepc:58062');
+    });
+
+    test('una dirección explícita manda sobre la de la página', () {
+      expect(resolveApiBase('http://api.casa:9000', Uri.parse('http://littlepc:58062/')), 'http://api.casa:9000');
+    });
+
+    test('sin valor se adivina como siempre', () {
+      expect(resolveApiBase('', Uri.parse('http://192.168.1.40:8080/')), 'http://192.168.1.40:8001');
+    });
+  });
+
   group('audioType', () {
     test('declara el tipo que el backend acepta para cada extensión', () {
       expect(audioType('grabacion.wav').mimeType, 'audio/wav');
