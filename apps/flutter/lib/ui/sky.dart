@@ -7,9 +7,13 @@ import 'package:voces/ui/tokens.dart';
 /// Fondo vivo de toda la app. Un shader pinta el crepúsculo; si el
 /// dispositivo no lo compila, queda un degradado quieto con los mismos tonos.
 class Sky extends StatefulWidget {
-  const Sky({super.key, this.child});
+  const Sky({super.key, this.child, this.animating = true});
 
   final Widget? child;
+
+  /// A `false` cuando una pantalla opaca lo tapa: un shader a pantalla completa
+  /// repintándose en cada fotograma sin que nadie lo vea es trabajo perdido.
+  final bool animating;
 
   @override
   State<Sky> createState() => _SkyState();
@@ -20,6 +24,7 @@ class _SkyState extends State<Sky> with SingleTickerProviderStateMixin {
 
   late final Ticker _ticker;
   final _time = ValueNotifier<double>(0);
+  double _resumeAt = 0;
   Offset _pointer = const Offset(0.5, 0.35);
   Offset _target = const Offset(0.5, 0.35);
   ui.FragmentShader? _shader;
@@ -34,15 +39,28 @@ class _SkyState extends State<Sky> with SingleTickerProviderStateMixin {
     });
     _ticker = createTicker((elapsed) {
       _pointer = Offset.lerp(_pointer, _target, 0.04)!;
-      _time.value = elapsed.inMicroseconds / 1e6;
+      _time.value = _resumeAt + elapsed.inMicroseconds / 1e6;
     });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final still = MediaQuery.disableAnimationsOf(context);
-    if (still && _ticker.isActive) _ticker.stop();
+    _syncTicker();
+  }
+
+  @override
+  void didUpdateWidget(Sky oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncTicker();
+  }
+
+  void _syncTicker() {
+    final still = MediaQuery.disableAnimationsOf(context) || !widget.animating;
+    if (still && _ticker.isActive) {
+      _ticker.stop();
+      _resumeAt = _time.value; // al volver, el cielo sigue donde iba
+    }
     if (!still && !_ticker.isActive) _ticker.start();
   }
 

@@ -83,6 +83,8 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       backgroundColor: Palette.night,
       body: Sky(
+        // El mapa es opaco y tapa el cielo entero.
+        animating: _index != 1,
         child: Stack(
           children: [
             Positioned.fill(
