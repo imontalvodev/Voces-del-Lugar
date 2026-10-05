@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:voces/api.dart';
 import 'package:voces/shell.dart';
+import 'package:voces/ui/blur_gate.dart';
 import 'package:voces/ui/sky.dart';
 import 'package:voces/ui/tokens.dart';
 
@@ -36,6 +37,7 @@ class _VocesAppState extends State<VocesApp> {
         title: 'Voces del Lugar',
         debugShowCheckedModeBanner: false,
         theme: vocesTheme(),
+        builder: (context, child) => BlurGate(child: child!),
         home: AnimatedSwitcher(
           duration: const Duration(milliseconds: 600),
           child: _ready

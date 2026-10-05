@@ -12,6 +12,7 @@ import 'package:voces/pages/story_page.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/dusk_tiles.dart';
 import 'package:voces/ui/kit.dart';
+import 'package:voces/ui/blur_gate.dart';
 import 'package:voces/ui/story_card.dart';
 import 'package:voces/ui/tokens.dart';
 
@@ -443,6 +444,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
         onMapEvent: (event) {
           if (event.source != MapEventSource.mapController && event.source != MapEventSource.nonRotatedSizeChange) {
             _moves++;
+            BlurGate.of(context).ping(); // los cristales no desenfocan un mapa en movimiento
             _scheduleReload();
           }
         },
@@ -716,6 +718,7 @@ class _SearchBar extends StatelessWidget {
           const SizedBox(height: 8),
           Glass(
             radius: 22,
+            blur: 0, // con 94% de tinte el desenfoque no se aprecia
             tint: Palette.glassStrong.withValues(alpha: 0.94),
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(

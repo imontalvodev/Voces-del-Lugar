@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:voces/story_format.dart';
+import 'package:voces/ui/blur_gate.dart';
 import 'package:voces/ui/tokens.dart';
 
 /// Superficie de cristal esmerilado sobre el cielo.
@@ -29,24 +30,25 @@ class Glass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shape = BorderRadius.circular(radius);
-    return ClipRRect(
-      borderRadius: shape,
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: tint,
-            borderRadius: shape,
-            border: border ? Border.all(color: Palette.glassEdge) : null,
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Colors.white.withValues(alpha: 0.06), Colors.white.withValues(alpha: 0.0)],
-            ),
-          ),
-          child: Padding(padding: padding, child: child),
+    final frosted = blur > 0 && !BlurGate.suspended(context);
+    final surface = DecoratedBox(
+      decoration: BoxDecoration(
+        color: tint,
+        borderRadius: shape,
+        border: border ? Border.all(color: Palette.glassEdge) : null,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.white.withValues(alpha: 0.06), Colors.white.withValues(alpha: 0.0)],
         ),
       ),
+      child: Padding(padding: padding, child: child),
+    );
+    // Desenfocar el fondo en cada fotograma es lo más caro de pintar: con
+    // `blur: 0` queda solo el tinte.
+    return ClipRRect(
+      borderRadius: shape,
+      child: frosted ? BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: surface) : surface,
     );
   }
 }
