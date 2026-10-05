@@ -1,0 +1,13 @@
+# SITE_ADDRESS=:80 sirve HTTP plano, para ir detrás de otro proxy que ya pone
+# el HTTPS. Con un dominio (voces.example) Caddy pide su propio certificado.
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
