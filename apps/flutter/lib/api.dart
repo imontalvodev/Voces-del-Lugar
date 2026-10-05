@@ -62,6 +62,7 @@ class StoryPin {
     required this.mediaUrls,
     this.authorId = '',
     this.narratorRelation,
+    this.decade,
   });
 
   final String id;
@@ -77,6 +78,9 @@ class StoryPin {
   final List<String> mediaUrls;
   final String authorId;
   final String? narratorRelation;
+
+  /// Año aproximado de lo que se cuenta, si quien la subió lo dijo.
+  final int? decade;
 
   bool get published => status == 'published';
   bool get pending => status == 'pending_review';
@@ -98,6 +102,7 @@ class StoryPin {
       mediaUrls: [for (final item in media) '$apiBase${(item as Map<String, dynamic>)['url']}'],
       authorId: json['author_id'] as String? ?? '',
       narratorRelation: json['narrator_relation'] as String?,
+      decade: json['decade_approx'] as int?,
     );
   }
 }

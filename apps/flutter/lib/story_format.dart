@@ -58,3 +58,12 @@ String excerpt(String? body, {int max = 180}) {
   if (flat.length <= max) return flat;
   return '${flat.substring(0, max - 1)}…';
 }
+
+/// Cuándo pasó, como lo diría quien lo cuenta: «Años 50». Fuera de los años 20
+/// a 90 la forma corta confunde, así que se nombra la década entera.
+String? decadeLabel(int? year) {
+  if (year == null) return null;
+  final decade = year - year % 10;
+  if (decade >= 1920 && decade <= 1990) return 'Años ${decade % 100}';
+  return 'Década de $decade';
+}

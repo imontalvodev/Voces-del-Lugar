@@ -7,8 +7,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
+import 'package:voces/links.dart';
 import 'package:voces/locate.dart';
-import 'package:voces/pages/story_page.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/dusk_tiles.dart';
 import 'package:voces/ui/kit.dart';
@@ -279,7 +279,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   }
 
   void _open(StoryPin story) {
-    Navigator.push(context, MaterialPageRoute<void>(builder: (_) => StoryPage(story: story)));
+    openStory(context, story);
   }
 
   @override

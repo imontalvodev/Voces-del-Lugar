@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
+import 'package:voces/links.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/audio.dart';
 import 'package:voces/ui/kit.dart';
@@ -46,6 +48,12 @@ class _StoryPageState extends State<StoryPage> {
     _api?.changes.removeListener(_onChanged);
     _energy.dispose();
     super.dispose();
+  }
+
+  Future<void> _copyLink() async {
+    await Clipboard.setData(ClipboardData(text: storyLink(_story.id, Uri.base)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enlace copiado. Quien lo abra llega a esta historia.')));
   }
 
   /// La tarjeta pudo quedarse vieja: se trae la ficha como está ahora.
@@ -194,6 +202,17 @@ class _StoryPageState extends State<StoryPage> {
                         ),
                       ),
                     ),
+                    if (story.published)
+                      Positioned(
+                        right: 16,
+                        top: 0,
+                        child: SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: GlassIconButton(icon: LucideIcons.link, tooltip: 'Copiar enlace', onPressed: _copyLink),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -255,6 +274,8 @@ class _StoryPageState extends State<StoryPage> {
                           children: [
                             StatusChip(status: story.status),
                             Text(categoryLabel(story.category), style: text(size: 14, color: Palette.haze)),
+                            if (decadeLabel(story.decade) case final decade?)
+                              Text(decade, style: text(size: 14, color: Palette.haze)),
                             Text('Licencia ${licenseLabel(story.license)}', style: text(size: 14, color: Palette.haze)),
                           ],
                         ),

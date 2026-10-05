@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
-import 'package:voces/pages/story_page.dart';
+import 'package:voces/links.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/kit.dart';
 import 'package:voces/ui/story_card.dart';
@@ -63,7 +63,7 @@ class HomePageState extends State<HomePage> {
   void _openById(String id) {
     final story = _stories.where((s) => s.id == id).firstOrNull;
     if (story == null) return;
-    Navigator.push(context, MaterialPageRoute<void>(builder: (_) => StoryPage(story: story)));
+    openStory(context, story);
   }
 
   @override

@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:voces/api.dart';
+import 'package:voces/links.dart';
 import 'package:voces/shell.dart';
 import 'package:voces/ui/blur_gate.dart';
 import 'package:voces/ui/sky.dart';
 import 'package:voces/ui/tokens.dart';
 
 void main() {
+  usePathUrlStrategy(); // /historia/<id> en vez de /#/historia/<id>
   useBundledFonts();
   runApp(const VocesApp());
 }
@@ -38,6 +41,7 @@ class _VocesAppState extends State<VocesApp> {
         debugShowCheckedModeBanner: false,
         theme: vocesTheme(),
         builder: (context, child) => BlurGate(child: child!),
+        onGenerateRoute: vocesRoute,
         home: AnimatedSwitcher(
           duration: const Duration(milliseconds: 600),
           child: _ready

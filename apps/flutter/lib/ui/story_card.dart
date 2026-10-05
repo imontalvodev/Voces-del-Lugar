@@ -2,6 +2,7 @@ import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
+import 'package:voces/links.dart';
 import 'package:voces/pages/story_page.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/kit.dart';
@@ -40,6 +41,7 @@ class _StoryCardState extends State<StoryCard> {
       openElevation: 0,
       closedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       tappable: false,
+      routeSettings: RouteSettings(name: storyPath(story.id)),
       openBuilder: (context, _) => StoryPage(story: story),
       closedBuilder: (context, open) {
         return MouseRegion(
@@ -174,7 +176,7 @@ class ReviewCard extends StatelessWidget {
                 icon: hasAudio ? LucideIcons.headphones : LucideIcons.bookOpenText,
                 tooltip: hasAudio ? 'Escucharla entera' : 'Leerla entera',
                 size: 54,
-                onPressed: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => StoryPage(story: story))),
+                onPressed: () => openStory(context, story),
               ),
             ],
           ),
