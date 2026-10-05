@@ -19,14 +19,14 @@ Map<String, dynamic> storyJson(int i) => {
       'media': [],
     };
 
-Future<void> pumpHome(WidgetTester tester, Size window) async {
+Future<void> pumpHome(WidgetTester tester, Size window, {ValueChanged<bool>? onHeroVisible, int stories = 6}) async {
   tester.view.physicalSize = window;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final api = VocesApi(
-    client: MockClient((_) async => http.Response(jsonEncode([for (var i = 0; i < 6; i++) storyJson(i)]), 200)),
+    client: MockClient((_) async => http.Response(jsonEncode([for (var i = 0; i < stories; i++) storyJson(i)]), 200)),
   );
-  await tester.pumpWidget(MaterialApp(home: Scaffold(body: HomePage(api: api, onLeaveStory: () {}, onOpenMap: () {}))));
+  await tester.pumpWidget(MaterialApp(home: Scaffold(body: HomePage(api: api, onLeaveStory: () {}, onOpenMap: () {}, onHeroVisible: onHeroVisible))));
   await tester.pump(const Duration(seconds: 3));
 }
 
@@ -50,6 +50,23 @@ void main() {
   testWidgets('si el héroe cabe, el aviso explica qué son las luces', (tester) async {
     await pumpHome(tester, const Size(1440, 1100));
     expect(find.textContaining('Cada luz es una de las 6 historias'), findsOneWidget);
+    await settle(tester);
+  });
+
+  testWidgets('al bajar a las tarjetas el paisaje deja de animarse y lo avisa', (tester) async {
+    final seen = <bool>[];
+    await pumpHome(tester, const Size(1440, 900), onHeroVisible: seen.add, stories: 24);
+    await tester.pump(const Duration(seconds: 3));
+    expect(tester.binding.transientCallbackCount, greaterThan(0), reason: 'el paisaje anima arriba');
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -2400));
+    await tester.pumpAndSettle(); // fallaría por tiempo si algo siguiera animándose
+    expect(seen.last, isFalse);
+    expect(tester.binding.transientCallbackCount, 0, reason: 'nada anima fuera de la vista');
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 4000));
+    await tester.pump();
+    expect(seen.last, isTrue);
     await settle(tester);
   });
 }

@@ -10,11 +10,15 @@ import 'package:voces/ui/tokens.dart';
 import 'package:voces/ui/voice_terrain.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, required this.api, required this.onLeaveStory, required this.onOpenMap});
+  const HomePage({super.key, required this.api, required this.onLeaveStory, required this.onOpenMap, this.onHeroVisible});
 
   final VocesApi api;
   final VoidCallback onLeaveStory;
   final VoidCallback onOpenMap;
+
+  /// Avisa cuando el héroe entra o sale de la vista: al bajar a las tarjetas,
+  /// su fondo opaco tapa el cielo y nadie ve el paisaje.
+  final ValueChanged<bool>? onHeroVisible;
 
   @override
   State<HomePage> createState() => HomePageState();
@@ -28,6 +32,17 @@ class HomePageState extends State<HomePage> {
   /// El aviso solo se ve bien si el héroe entero cabe en la ventana; si no,
   /// quedaría detrás del dock o fuera de la vista.
   bool _hintFits = true;
+  bool _heroVisible = true;
+
+  bool _onScroll(ScrollMetrics metrics) {
+    final hero = _heroKey.currentContext?.size?.height ?? double.infinity;
+    final visible = metrics.pixels < hero;
+    if (visible != _heroVisible) {
+      setState(() => _heroVisible = visible);
+      widget.onHeroVisible?.call(visible);
+    }
+    return false;
+  }
 
   void _checkHintFits() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -100,106 +115,112 @@ class HomePageState extends State<HomePage> {
     ]);
 
     _checkHintFits();
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: VoiceTerrain(beacons: beacons, onBeacon: _openById, horizon: narrow ? 0.7 : 0.5),
-              ),
-              // El héroe crece con su texto: en una ventana baja el aviso de las
-              // luces queda debajo de los botones en vez de encima.
-              ConstrainedBox(
-                key: _heroKey,
-                constraints: BoxConstraints(minHeight: (size.height * 0.92).clamp(560.0, 980.0)),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SafeArea(
-                      bottom: false,
-                      child: Padding(
-                        padding: EdgeInsets.fromLTRB(pad, narrow ? 28 : 56, pad, 0),
-                        child: _Hero(narrow: narrow, onLeaveStory: widget.onLeaveStory, onOpenMap: widget.onOpenMap),
-                      ),
-                    ),
-                    SizedBox(height: (narrow ? 118 : 110) + _hintRoom),
-                  ],
-                ),
-              ),
-              if (beacons.isNotEmpty && _hintFits)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: narrow ? 118 : 110,
-                  child: IgnorePointer(
-                    child: Center(
-                      child: Glass(
-                        radius: 999,
-                        tint: Palette.glassStrong.withValues(alpha: 0.6),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Text(
-                          beacons.length == 1
-                              ? 'La luz es una historia. Tócala para abrirla.'
-                              : 'Cada luz es una de las ${beacons.length} historias. Toca una para abrirla.',
-                          textAlign: TextAlign.center,
-                          style: text(size: 13.5, color: Palette.bone.withValues(alpha: 0.85)),
-                        ),
-                      ),
-                    ).animate().fadeIn(delay: 1800.ms, duration: 800.ms),
+    return NotificationListener<ScrollUpdateNotification>(
+      onNotification: (n) => n.depth == 0 && _onScroll(n.metrics),
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: TickerMode(
+                    enabled: _heroVisible,
+                    child: VoiceTerrain(beacons: beacons, onBeacon: _openById, horizon: narrow ? 0.7 : 0.5),
                   ),
                 ),
-            ],
-          ),
-        ),
-        DecoratedSliver(
-          decoration: const BoxDecoration(color: Palette.deep),
-          sliver: SliverMainAxisGroup(
-            slivers: [
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
-                sliver: SliverToBoxAdapter(
+                // El héroe crece con su texto: en una ventana baja el aviso de las
+                // luces queda debajo de los botones en vez de encima.
+                ConstrainedBox(
+                  key: _heroKey,
+                  constraints: BoxConstraints(minHeight: (size.height * 0.92).clamp(560.0, 980.0)),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Lo último que se ha contado', style: display(narrow ? 36 : 48)),
-                      const SizedBox(height: 8),
-                      Text(
-                        _loading
-                            ? 'Buscando en el archivo…'
-                            : '${_stories.length} ${_stories.length == 1 ? 'historia publicada' : 'historias publicadas'}',
-                        style: text(size: 15, color: Palette.haze),
-                      ),
-                      if (categories.length > 1) ...[
-                        const SizedBox(height: 20),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          clipBehavior: Clip.none,
-                          child: Row(
-                            children: [
-                              FilterPill(label: 'Todas', selected: _category == null, onTap: () => setState(() => _category = null)),
-                              for (final c in categories) ...[
-                                const SizedBox(width: 8),
-                                FilterPill(
-                                  label: categoryLabel(c),
-                                  selected: _category == c,
-                                  onTap: () => setState(() => _category = _category == c ? null : c),
-                                ),
-                              ],
-                            ],
-                          ),
+                      SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(pad, narrow ? 28 : 56, pad, 0),
+                          child: _Hero(narrow: narrow, onLeaveStory: widget.onLeaveStory, onOpenMap: widget.onOpenMap),
                         ),
-                      ],
-                      const SizedBox(height: 28),
+                      ),
+                      SizedBox(height: (narrow ? 118 : 110) + _hintRoom),
                     ],
                   ),
                 ),
-              ),
-              SliverPadding(padding: EdgeInsets.fromLTRB(pad, 0, pad, 140), sliver: _body(filtered)),
-            ],
+                if (beacons.isNotEmpty && _hintFits)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: narrow ? 118 : 110,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Glass(
+                          radius: 999,
+                          tint: Palette.glassStrong.withValues(alpha: 0.6),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Text(
+                            beacons.length == 1
+                                ? 'La luz es una historia. Tócala para abrirla.'
+                                : 'Cada luz es una de las ${beacons.length} historias. Toca una para abrirla.',
+                            textAlign: TextAlign.center,
+                            style: text(size: 13.5, color: Palette.bone.withValues(alpha: 0.85)),
+                          ),
+                        ),
+                      ).animate().fadeIn(delay: 1800.ms, duration: 800.ms),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-      ],
+          DecoratedSliver(
+            decoration: const BoxDecoration(color: Palette.deep),
+            sliver: SliverMainAxisGroup(
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Lo último que se ha contado', style: display(narrow ? 36 : 48)),
+                        const SizedBox(height: 8),
+                        Text(
+                          _loading
+                              ? 'Buscando en el archivo…'
+                              : '${_stories.length} ${_stories.length == 1 ? 'historia publicada' : 'historias publicadas'}',
+                          style: text(size: 15, color: Palette.haze),
+                        ),
+                        if (categories.length > 1) ...[
+                          const SizedBox(height: 20),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            clipBehavior: Clip.none,
+                            child: Row(
+                              children: [
+                                FilterPill(label: 'Todas', selected: _category == null, onTap: () => setState(() => _category = null)),
+                                for (final c in categories) ...[
+                                  const SizedBox(width: 8),
+                                  FilterPill(
+                                    label: categoryLabel(c),
+                                    selected: _category == c,
+                                    onTap: () => setState(() => _category = _category == c ? null : c),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 28),
+                      ],
+                    ),
+                  ),
+                ),
+                SliverPadding(padding: EdgeInsets.fromLTRB(pad, 0, pad, 140), sliver: _body(filtered)),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

@@ -21,6 +21,7 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+  bool _homeHeroVisible = true;
   LatLng? _pendingPoint;
   String? _pendingPlace;
   final _homeKey = GlobalKey<HomePageState>();
@@ -67,7 +68,13 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final pages = [
-      HomePage(key: _homeKey, api: widget.api, onLeaveStory: _choosePointOnMap, onOpenMap: () => setState(() => _index = 1)),
+      HomePage(
+        key: _homeKey,
+        api: widget.api,
+        onLeaveStory: _choosePointOnMap,
+        onOpenMap: () => setState(() => _index = 1),
+        onHeroVisible: (visible) => setState(() => _homeHeroVisible = visible),
+      ),
       MapPage(key: _mapKey, api: widget.api, onLeaveStory: _leaveStory),
       AccountPage(
         key: _accountKey,
@@ -83,8 +90,13 @@ class _AppShellState extends State<AppShell> {
     return Scaffold(
       backgroundColor: Palette.night,
       body: Sky(
-        // El mapa es opaco y tapa el cielo entero.
-        animating: _index != 1,
+        // El mapa es opaco y tapa el cielo entero; en la portada, lo tapan las
+        // tarjetas en cuanto se baja del héroe.
+        animating: switch (_index) {
+          0 => _homeHeroVisible,
+          1 => false,
+          _ => true,
+        },
         child: Stack(
           children: [
             Positioned.fill(
