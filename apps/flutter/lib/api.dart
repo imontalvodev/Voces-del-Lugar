@@ -21,7 +21,14 @@ String defaultApiBase(Uri page) {
   return 'http://localhost:$apiPort';
 }
 
-final String apiBase = _apiBaseOverride.isNotEmpty ? _apiBaseOverride : defaultApiBase(Uri.base);
+/// `API_BASE=origin` deja la API en la misma dirección que sirve la app, que es
+/// lo que pasa detrás de un proxy en el que la web y `/api` comparten puerto.
+String resolveApiBase(String override, Uri page) {
+  if (override == 'origin') return page.origin;
+  return override.isNotEmpty ? override : defaultApiBase(page);
+}
+
+final String apiBase = resolveApiBase(_apiBaseOverride, Uri.base);
 
 class ApiException implements Exception {
   ApiException(this.message);
