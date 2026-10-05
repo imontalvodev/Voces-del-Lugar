@@ -21,6 +21,23 @@ class HomePage extends StatefulWidget {
 }
 
 class HomePageState extends State<HomePage> {
+  /// Hueco que deja el héroe bajo los botones para el aviso de las luces.
+  static const _hintRoom = 90.0;
+  final _heroKey = GlobalKey();
+
+  /// El aviso solo se ve bien si el héroe entero cabe en la ventana; si no,
+  /// quedaría detrás del dock o fuera de la vista.
+  bool _hintFits = true;
+
+  void _checkHintFits() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final box = _heroKey.currentContext?.findRenderObject() as RenderBox?;
+      if (!mounted || box == null || !box.hasSize) return;
+      final fits = box.size.height <= MediaQuery.sizeOf(context).height;
+      if (fits != _hintFits) setState(() => _hintFits = fits);
+    });
+  }
+
   List<StoryPin> _stories = [];
   String? _error;
   bool _loading = true;
@@ -82,51 +99,57 @@ class HomePageState extends State<HomePage> {
       for (final s in _stories) (id: s.id, lat: s.point.latitude, lon: s.point.longitude, label: '${s.title}\n${s.placeName}'),
     ]);
 
+    _checkHintFits();
     return CustomScrollView(
       slivers: [
         SliverToBoxAdapter(
-          child: SizedBox(
-            height: (size.height * 0.92).clamp(560.0, 980.0),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: VoiceTerrain(beacons: beacons, onBeacon: _openById, horizon: narrow ? 0.7 : 0.5),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: VoiceTerrain(beacons: beacons, onBeacon: _openById, horizon: narrow ? 0.7 : 0.5),
+              ),
+              // El héroe crece con su texto: en una ventana baja el aviso de las
+              // luces queda debajo de los botones en vez de encima.
+              ConstrainedBox(
+                key: _heroKey,
+                constraints: BoxConstraints(minHeight: (size.height * 0.92).clamp(560.0, 980.0)),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SafeArea(
+                      bottom: false,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(pad, narrow ? 28 : 56, pad, 0),
+                        child: _Hero(narrow: narrow, onLeaveStory: widget.onLeaveStory, onOpenMap: widget.onOpenMap),
+                      ),
+                    ),
+                    SizedBox(height: (narrow ? 118 : 110) + _hintRoom),
+                  ],
                 ),
+              ),
+              if (beacons.isNotEmpty && _hintFits)
                 Positioned(
-                  left: pad,
-                  right: pad,
-                  top: 0,
-                  child: SafeArea(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: narrow ? 28 : 56),
-                      child: _Hero(narrow: narrow, onLeaveStory: widget.onLeaveStory, onOpenMap: widget.onOpenMap),
-                    ),
+                  left: 0,
+                  right: 0,
+                  bottom: narrow ? 118 : 110,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: Glass(
+                        radius: 999,
+                        tint: Palette.glassStrong.withValues(alpha: 0.6),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Text(
+                          beacons.length == 1
+                              ? 'La luz es una historia. Tócala para abrirla.'
+                              : 'Cada luz es una de las ${beacons.length} historias. Toca una para abrirla.',
+                          textAlign: TextAlign.center,
+                          style: text(size: 13.5, color: Palette.bone.withValues(alpha: 0.85)),
+                        ),
+                      ),
+                    ).animate().fadeIn(delay: 1800.ms, duration: 800.ms),
                   ),
                 ),
-                if (beacons.isNotEmpty)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: narrow ? 118 : 110,
-                    child: IgnorePointer(
-                      child: Center(
-                        child: Glass(
-                          radius: 999,
-                          tint: Palette.glassStrong.withValues(alpha: 0.6),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Text(
-                            beacons.length == 1
-                                ? 'La luz es una historia. Tócala para abrirla.'
-                                : 'Cada luz es una de las ${beacons.length} historias. Toca una para abrirla.',
-                            textAlign: TextAlign.center,
-                            style: text(size: 13.5, color: Palette.bone.withValues(alpha: 0.85)),
-                          ),
-                        ),
-                      ).animate().fadeIn(delay: 1800.ms, duration: 800.ms),
-                    ),
-                  ),
-              ],
-            ),
+            ],
           ),
         ),
         DecoratedSliver(
