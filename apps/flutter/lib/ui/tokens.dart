@@ -34,6 +34,21 @@ abstract final class Motion {
   }
 }
 
+/// Archivos de `google_fonts/` que la app necesita: así el navegador no los pide
+/// a Google al arrancar y la web funciona también sin internet.
+const bundledFontFiles = [
+  'BricolageGrotesque-Regular',
+  'BricolageGrotesque-Medium',
+  'BricolageGrotesque-SemiBold',
+  'BricolageGrotesque-Bold',
+  'InstrumentSerif-Regular',
+  'InstrumentSerif-Italic',
+];
+
+void useBundledFonts() {
+  GoogleFonts.config.allowRuntimeFetching = false;
+}
+
 /// Instrument Serif para lo que se lee como un título de relato.
 TextStyle display(double size, {Color color = Palette.bone, bool italic = false, double height = 1.02}) {
   return GoogleFonts.instrumentSerif(

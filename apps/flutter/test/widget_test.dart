@@ -1,6 +1,9 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:voces/api.dart';
 import 'package:voces/ui/kit.dart';
+import 'package:voces/ui/tokens.dart';
 import 'package:voces/ui/voice_terrain.dart';
 
 void main() {
@@ -74,6 +77,22 @@ void main() {
 
     test('sin historias no hay farolas', () {
       expect(beaconsFromPoints(const []), isEmpty);
+    });
+  });
+
+  group('fuentes empaquetadas', () {
+    test('la app no pide fuentes a Google en tiempo de ejecución', () {
+      useBundledFonts();
+      expect(GoogleFonts.config.allowRuntimeFetching, isFalse);
+    });
+
+    test('cada peso que usa la app viene dentro de los assets', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      final assets = manifest.listAssets();
+      for (final file in bundledFontFiles) {
+        expect(assets, contains('google_fonts/$file.ttf'), reason: file);
+      }
     });
   });
 }

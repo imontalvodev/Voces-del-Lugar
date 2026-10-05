@@ -5,6 +5,7 @@ import 'package:voces/ui/sky.dart';
 import 'package:voces/ui/tokens.dart';
 
 void main() {
+  useBundledFonts();
   runApp(const VocesApp());
 }
 
