@@ -199,7 +199,7 @@ class AccountPageState extends State<AccountPage> {
                     SliverPadding(
                       padding: EdgeInsets.symmetric(horizontal: pad),
                       sliver: SliverGrid(
-                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                           maxCrossAxisExtent: 520,
                           mainAxisSpacing: 18,
                           crossAxisSpacing: 18,
@@ -267,11 +267,11 @@ class AccountPageState extends State<AccountPage> {
                           ),
                         )
                       : SliverGrid(
-                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: 420,
                             mainAxisSpacing: 18,
                             crossAxisSpacing: 18,
-                            mainAxisExtent: 280,
+                            mainAxisExtent: StoryCard.extent,
                           ),
                           delegate: SliverChildBuilderDelegate(
                             (context, index) => StoryCard(key: ValueKey(_mine[index].id), story: _mine[index], showStatus: true),

@@ -185,12 +185,12 @@ class HomePageState extends State<HomePage> {
       maxCrossAxisExtent: 420,
       mainAxisSpacing: 18,
       crossAxisSpacing: 18,
-      mainAxisExtent: 232,
+      mainAxisExtent: StoryCard.extent,
     );
     if (_loading) {
       return SliverGrid(
         gridDelegate: grid,
-        delegate: SliverChildBuilderDelegate((_, _) => const LoadingSlab(height: 232, radius: 24), childCount: 3),
+        delegate: SliverChildBuilderDelegate((_, _) => const LoadingSlab(height: StoryCard.extent, radius: 24), childCount: 3),
       );
     }
     if (_error != null) {

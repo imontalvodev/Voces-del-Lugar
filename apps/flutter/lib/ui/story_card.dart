@@ -17,6 +17,10 @@ String narratorLine(StoryPin story) {
 class StoryCard extends StatefulWidget {
   const StoryCard({super.key, required this.story, this.showStatus = false});
 
+  /// Alto de cada tarjeta en las rejillas: cabe un título de dos líneas, el
+  /// principio del relato y el pie con tipo y época.
+  static const double extent = 300;
+
   final StoryPin story;
   final bool showStatus;
 
@@ -63,7 +67,6 @@ class _StoryCardState extends State<StoryCard> {
                 child: ExcludeSemantics(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Row(
                         children: [
@@ -86,22 +89,39 @@ class _StoryCardState extends State<StoryCard> {
                       ),
                       const SizedBox(height: 14),
                       Text(story.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: display(30, height: 1.05)),
-                      const SizedBox(height: 10),
-                      Text(narratorLine(story), style: text(size: 14, color: Palette.haze)),
-                      const SizedBox(height: 18),
-                      VoicePrint(seed: story.id, bars: 38, height: 30, alive: _hover && hasAudio, dim: !hasAudio),
-                      if (widget.showStatus) ...[
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            StatusChip(status: story.status),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(categoryLabel(story.category), style: text(size: 13, color: Palette.haze)),
-                            ),
-                          ],
+                      const SizedBox(height: 8),
+                      Text(narratorLine(story), maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 14, color: Palette.haze)),
+                      if (excerpt(story.body).isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          excerpt(story.body),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: text(size: 14.5, color: Palette.bone.withValues(alpha: 0.78), height: 1.45),
                         ),
                       ],
+                      const Spacer(),
+                      VoicePrint(seed: story.id, bars: 38, height: 26, alive: _hover && hasAudio, dim: !hasAudio),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          if (widget.showStatus) ...[StatusChip(status: story.status), const SizedBox(width: 12)],
+                          Flexible(
+                            child: Text(
+                              categoryLabel(story.category),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text(size: 13, weight: FontWeight.w600, color: Palette.bone.withValues(alpha: 0.86)),
+                            ),
+                          ),
+                          if (decadeLabel(story.decade) case final decade?) ...[
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(decade, maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 13, color: Palette.haze)),
+                            ),
+                          ],
+                        ],
+                      ),
                     ],
                   ),
                 ),
