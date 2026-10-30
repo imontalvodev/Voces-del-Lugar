@@ -124,3 +124,16 @@ String rolCorto(String role) {
     _ => 'Colaboración',
   };
 }
+
+/// Por qué una historia sigue esperando en la cola, dicho para quien modera.
+String? motivoRevision(String? reason) {
+  return switch (reason) {
+    'link' => 'Lleva un enlace',
+    'contact' => 'Lleva un email o un teléfono',
+    'language' => 'Puede llevar palabras malsonantes',
+    'many' => 'Muchas seguidas de la misma cuenta',
+    'unpublished' => 'Retirada del mapa',
+    'awaiting_media' => 'Espera su audio',
+    _ => null,
+  };
+}

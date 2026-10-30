@@ -74,6 +74,9 @@ class ContarPageState extends State<ContarPage> {
   bool _intentoGuardar = false;
   bool _guardando = false;
   bool _errorGuardar = false;
+
+  /// Lo que dijo la API al no dejar guardar (el filtro), si dijo algo.
+  String? _motivoError;
   StoryPin? _creada;
   bool _audioEnviado = false;
   bool _publicada = false;
@@ -252,6 +255,7 @@ class ContarPageState extends State<ContarPage> {
     setState(() {
       _guardando = true;
       _errorGuardar = false;
+      _motivoError = null;
     });
     try {
       // Si un intento anterior ya creó la historia y falló al subir el audio,
@@ -266,7 +270,7 @@ class ContarPageState extends State<ContarPage> {
           narratorRelation: _parentesco.text.trim(),
         );
       }
-      final creada = _creada ??= await widget.api.createStory(
+      var creada = _creada ??= await widget.api.createStory(
         title: _titulo.text.trim(),
         body: _b.modo == 'escribir' ? _texto.text.trim() : '',
         narratorName: _narrador.text.trim(),
@@ -280,14 +284,18 @@ class ContarPageState extends State<ContarPage> {
       );
       if (!_audioEnviado) {
         if (_b.modo == 'grabar' && _grabacion != null) {
-          await widget.api.uploadAudio(creada.id, _grabacion!.nombre, _grabacion!.bytes);
+          creada = await widget.api.uploadAudio(creada.id, _grabacion!.nombre, _grabacion!.bytes);
         } else if (_b.modo == 'adjuntar' && _archivo != null) {
-          await widget.api.uploadAudio(creada.id, _archivo!.name, await _archivo!.readAsBytes());
+          creada = await widget.api.uploadAudio(creada.id, _archivo!.name, await _archivo!.readAsBytes());
         }
+        _creada = creada;
         _audioEnviado = true;
       }
-      final publica = publicar && (widget.api.account?.canModerate ?? false);
-      if (publica) _creada = await widget.api.publish(creada.id);
+      // Si pasó el filtro ya está publicada; si no, quien modera puede publicarla.
+      if (publicar && !creada.published && (widget.api.account?.canModerate ?? false)) {
+        _creada = creada = await widget.api.publish(creada.id);
+      }
+      final publica = creada.published;
       _guardado?.cancel();
       await Borrador.borrar();
       if (!mounted) return;
@@ -309,7 +317,10 @@ class ContarPageState extends State<ContarPage> {
         );
         if (otraVez && await _entrar(caducada: true)) return _guardar(publicar: publicar);
       } else {
-        setState(() => _errorGuardar = true);
+        setState(() {
+          _errorGuardar = true;
+          _motivoError = e.motivo;
+        });
       }
     } catch (_) {
       if (mounted) setState(() => _errorGuardar = true);
@@ -801,13 +812,20 @@ class ContarPageState extends State<ContarPage> {
           Aviso(
             tono: TonoAviso.error,
             titulo: 'No se ha podido guardar',
-            texto: 'Tu historia sigue aquí, no se ha perdido nada. Revisa la conexión.',
-            accion: BotonPlaca(
-              etiqueta: 'Volver a intentarlo',
-              variante: VarianteBoton.secundario,
-              tamano: TamanoBoton.medio,
-              onPressed: () => _guardar(),
-            ),
+            texto: _motivoError ?? 'Tu historia sigue aquí, no se ha perdido nada. Revisa la conexión.',
+            accion: _motivoError == null
+                ? BotonPlaca(
+                    etiqueta: 'Volver a intentarlo',
+                    variante: VarianteBoton.secundario,
+                    tamano: TamanoBoton.medio,
+                    onPressed: () => _guardar(),
+                  )
+                : BotonPlaca(
+                    etiqueta: _motivoError!.contains('quien la cuenta') ? 'Corregir el nombre' : 'Corregir la historia',
+                    variante: VarianteBoton.secundario,
+                    tamano: TamanoBoton.medio,
+                    onPressed: () => _irA(_motivoError!.contains('quien la cuenta') ? 3 : 2),
+                  ),
           ),
         ],
         if (_b.fallecido) ...[
@@ -896,7 +914,7 @@ class ContarPageState extends State<ContarPage> {
           const TituloPantalla('Gracias. Tu historia está guardada.'),
           const SizedBox(height: 10),
           Text(
-            _publicada ? 'Ya está en el mapa. Cualquiera puede verla y escucharla.' : 'Ahora la revisa una persona del equipo. Cuando la publique, aparecerá en el mapa. Mientras tanto, puedes corregirla desde tu cuenta.',
+            _publicada ? 'Ya está en el mapa. Cualquiera puede verla y escucharla.' : 'Antes de publicarla la mirará una persona del equipo. Mientras tanto, puedes corregirla desde tu cuenta.',
             style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: c.piedra),
           ),
           if (creada != null) ...[

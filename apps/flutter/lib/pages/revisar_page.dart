@@ -312,6 +312,21 @@ class _ColaRevision extends StatelessWidget {
                         ].join(' · '),
                         style: letra.bodySmall!.copyWith(color: c.piedra),
                       ),
+                      if (motivoRevision(h.reviewReason) case final motivo?) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(LucideIcons.flag, size: 16, color: c.ocreTinta),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                motivo,
+                                style: letra.bodySmall!.copyWith(color: c.ocreTinta, fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -345,6 +360,7 @@ class _Revision extends StatelessWidget {
     final amplio = tamano(context) == Vdl.amplio;
     final cuerpo = (h.body ?? '').trim();
     final filas = <(String, Widget)>[
+      if (motivoRevision(h.reviewReason) case final motivo?) ('Por qué espera', Text(motivo)),
       ('Lugar', Text(h.placeName)),
       ('Tipo', EtiquetaTipo(h.category, color: c.tinta)),
       ('Época', Text(decadeLabel(h.decade) ?? 'Sin indicar')),

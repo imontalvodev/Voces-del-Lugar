@@ -31,8 +31,14 @@ String resolveApiBase(String override, Uri page) {
 final String apiBase = resolveApiBase(_apiBaseOverride, Uri.base);
 
 class ApiException implements Exception {
-  ApiException(this.message);
+  ApiException(this.message, {this.status});
   final String message;
+
+  /// Código HTTP, si la API llegó a responder.
+  final int? status;
+
+  /// Lo que la API no dejó guardar y por qué, dicho para quien escribe (422).
+  String? get motivo => status == 422 ? message : null;
   @override
   String toString() => message;
 }
@@ -55,6 +61,7 @@ class StoryPin {
     required this.narratorName,
     required this.license,
     required this.status,
+    this.reviewReason,
     required this.category,
     required this.placeId,
     required this.placeName,
@@ -76,6 +83,10 @@ class StoryPin {
   final String? narratorName;
   final String license;
   final String status;
+
+  /// Por qué sigue en revisión (`awaiting_media`, `link`, `contact`,
+  /// `language`, `many`, `unpublished`), o nada.
+  final String? reviewReason;
   final String category;
   final String placeId;
   final String placeName;
@@ -113,6 +124,7 @@ class StoryPin {
       narratorName: json['narrator_name'] as String?,
       license: json['license'] as String,
       status: json['status'] as String,
+      reviewReason: json['review_reason'] as String?,
       category: json['category'] as String? ?? 'anecdota',
       placeId: place['id'] as String,
       placeName: place['name'] as String,
@@ -382,7 +394,8 @@ class VocesApi {
     return StoryPin.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<void> uploadAudio(String storyId, String filename, List<int> bytes) async {
+  /// Sube el audio y devuelve la historia como queda: si lo esperaba, ya publicada.
+  Future<StoryPin> uploadAudio(String storyId, String filename, List<int> bytes) async {
     final request = http.MultipartRequest('POST', Uri.parse('$apiBase/api/v1/stories/$storyId/audio'));
     request.headers.addAll(_auth);
     request.files.add(
@@ -392,6 +405,7 @@ class VocesApi {
     final response = await http.Response.fromStream(streamed);
     _expect(response);
     _touched();
+    return StoryPin.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<StoryPin> publish(String storyId) => _act(storyId, 'publish');
@@ -480,7 +494,7 @@ class VocesApi {
       throw ApiException('La sesión ha caducado. Vuelve a entrar.');
     }
     if (response.statusCode >= 200 && response.statusCode < 300) return;
-    throw ApiException(_detail(response));
+    throw ApiException(_detail(response), status: response.statusCode);
   }
 
   String _detail(http.Response response) {

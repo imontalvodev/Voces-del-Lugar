@@ -12,8 +12,9 @@ import 'package:voces/theme/letra.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
 
-Map<String, dynamic> _h(String id, String status, {int numero = 12}) => {
+Map<String, dynamic> _h(String id, String status, {int numero = 12, String? motivo}) => {
   'id': id,
+  'review_reason': motivo,
   'number': numero,
   'title': 'Historia $id',
   'body': 'Texto de $id',
@@ -215,6 +216,19 @@ void main() {
       expect(find.text('¿Rechazar esta historia?'), findsOneWidget);
       await _pulsar(tester, 'Sí, rechazar');
       expect(find.text('Rechazada. No llegará al mapa.'), findsOneWidget);
+    });
+
+    testWidgets('dice por qué el filtro la dejó esperando', (tester) async {
+      await _montar(
+        tester,
+        (api) => RevisarPage(api: api),
+        rol: 'admin',
+        responder: (_) async => http.Response(jsonEncode([_h('a', 'pending_review', motivo: 'link'), _h('b', 'pending_review')]), 200),
+      );
+      expect(find.text('Lleva un enlace'), findsOneWidget);
+      await _pulsar(tester, 'Historia a');
+      expect(find.text('Por qué espera'), findsOneWidget);
+      expect(find.text('Lleva un enlace'), findsOneWidget);
     });
 
     testWidgets('sin nada por revisar lo dice', (tester) async {

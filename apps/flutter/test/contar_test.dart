@@ -23,7 +23,12 @@ class _Llamadas {
   var verLoHecho = 0;
 }
 
-Future<_Llamadas> _asistente(WidgetTester tester, {bool conCuenta = true}) async {
+Future<_Llamadas> _asistente(
+  WidgetTester tester, {
+  bool conCuenta = true,
+  String estado = 'pending_review',
+  http.Response? Function(http.Request request)? responder,
+}) async {
   SharedPreferences.setMockInitialValues({});
   tester.view.physicalSize = const Size(412, 1800);
   tester.view.devicePixelRatio = 1;
@@ -32,6 +37,8 @@ Future<_Llamadas> _asistente(WidgetTester tester, {bool conCuenta = true}) async
   final api = VocesApi(
     client: MockClient((request) async {
       llamadas.peticiones.add(request);
+      final propia = responder?.call(request);
+      if (propia != null) return propia;
       final cuerpo = request.body.isEmpty ? <String, dynamic>{} : jsonDecode(request.body) as Map<String, dynamic>;
       return http.Response(
         jsonEncode({
@@ -42,7 +49,7 @@ Future<_Llamadas> _asistente(WidgetTester tester, {bool conCuenta = true}) async
           'narrator_relation': cuerpo['narrator_relation'],
           'narrator_deceased': cuerpo['narrator_deceased'] ?? false,
           'license': cuerpo['license'] ?? 'CC-BY-SA-4.0',
-          'status': 'pending_review',
+          'status': estado,
           'category': cuerpo['category'] ?? 'otro',
           'decade_approx': cuerpo['decade_approx'],
           'place': {'id': 'p', 'name': 'La fuente', 'latitude': 40.2, 'longitude': -3.7},
@@ -132,6 +139,20 @@ class _MicroFalso extends RecordPlatform {
   Stream<RecordState> onStateChanged(String recorderId) => const Stream.empty();
   @override
   void setOnConfigChanged(String recorderId, void Function(RecordConfig config)? handler) {}
+}
+
+/// Rellena los cuatro pasos con una historia escrita y llega a «Guardar».
+Future<void> _rellenar(WidgetTester tester) async {
+  await _marcarSitio(tester);
+  await tester.enterText(find.byType(TextField).last, 'La fuente');
+  await _pulsar(tester, 'Siguiente: historia');
+  await _pulsar(tester, 'Escribir');
+  await tester.enterText(find.byType(TextField).at(0), 'Aquel invierno se heló la fuente.');
+  await tester.enterText(find.byType(TextField).at(1), 'La noche que se heló la fuente');
+  await _pulsar(tester, 'Anécdota');
+  await _pulsar(tester, 'Siguiente: quién la cuenta');
+  await _pulsar(tester, 'Siguiente: permiso');
+  await _pulsar(tester, 'Quien la cuenta me ha dado permiso para publicarla');
 }
 
 void main() {
@@ -292,5 +313,41 @@ void main() {
     await _pulsar(tester, 'Siguiente: historia');
     expect(find.bySemanticsLabel('¿Qué tipo de historia es?'), findsOneWidget);
     semantica.dispose();
+  });
+
+  testWidgets('si pasa el filtro se publica sola y lo dice', (tester) async {
+    await _asistente(tester, estado: 'published');
+    await _rellenar(tester);
+    await _pulsar(tester, 'Guardar la historia');
+    expect(find.text('Gracias. Tu historia está guardada.'), findsOneWidget);
+    expect(find.text('Ya está en el mapa. Cualquiera puede verla y escucharla.'), findsOneWidget);
+    expect(find.text('PUBLICADA'), findsOneWidget);
+  });
+
+  testWidgets('si el filtro no la deja pasar, dice por qué y lleva a corregirla', (tester) async {
+    await _asistente(
+      tester,
+      responder: (request) => http.Response(
+        jsonEncode({'detail': 'La historia no se entiende. Revisa el texto antes de guardarla.'}),
+        422,
+        headers: {'content-type': 'application/json; charset=utf-8'},
+      ),
+    );
+    await _rellenar(tester);
+    await _pulsar(tester, 'Guardar la historia');
+    expect(find.text('No se ha podido guardar'), findsOneWidget);
+    expect(find.text('La historia no se entiende. Revisa el texto antes de guardarla.'), findsOneWidget);
+    await _pulsar(tester, 'Corregir la historia');
+    expect(find.text('Cuéntala'), findsOneWidget);
+  });
+
+  testWidgets('si se queda en revisión, dice que la mirará alguien', (tester) async {
+    await _asistente(tester);
+    await _rellenar(tester);
+    await _pulsar(tester, 'Guardar la historia');
+    expect(
+      find.text('Antes de publicarla la mirará una persona del equipo. Mientras tanto, puedes corregirla desde tu cuenta.'),
+      findsOneWidget,
+    );
   });
 }
