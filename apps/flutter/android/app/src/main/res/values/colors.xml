@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Colores de «Placa y registro»: cal de fondo y añil del icono. -->
+    <color name="cal">#F5F6F3</color>
+    <color name="icono_fondo">#2638A8</color>
+</resources>
