@@ -3,6 +3,8 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:voces/api.dart';
 import 'package:voces/links.dart';
 import 'package:voces/shell.dart';
+import 'package:voces/theme/vdl_colors.dart';
+import 'package:voces/theme/vdl_theme.dart';
 import 'package:voces/ui/blur_gate.dart';
 import 'package:voces/ui/sky.dart';
 import 'package:voces/ui/tokens.dart';
@@ -39,7 +41,9 @@ class _VocesAppState extends State<VocesApp> {
       child: MaterialApp(
         title: 'Voces del Lugar',
         debugShowCheckedModeBanner: false,
-        theme: vocesTheme(),
+        theme: vdlTheme(VdlColors.claro, Brightness.light),
+        darkTheme: vdlTheme(VdlColors.oscuro, Brightness.dark),
+        themeMode: ThemeMode.system,
         builder: (context, child) => BlurGate(child: child!),
         onGenerateRoute: vocesRoute,
         home: AnimatedSwitcher(
