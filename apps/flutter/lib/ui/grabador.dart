@@ -55,10 +55,10 @@ class Grabador extends StatefulWidget {
   final Future<void> Function()? abrirAjustes;
 
   @override
-  State<Grabador> createState() => _GrabadorState();
+  State<Grabador> createState() => GrabadorState();
 }
 
-class _GrabadorState extends State<Grabador> {
+class GrabadorState extends State<Grabador> {
   final _recorder = AudioRecorder();
   StreamSubscription<Amplitude>? _nivel;
   Timer? _reloj;
@@ -212,6 +212,12 @@ class _GrabadorState extends State<Grabador> {
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  /// Si está grabando o en pausa, termina y entrega lo grabado. Se llama al
+  /// dejar el paso o cambiar de modo, para que no se pierda nada.
+  Future<void> terminarSiGraba() async {
+    if (_estado == EstadoGrabador.grabando || _estado == EstadoGrabador.pausa) await _terminar();
   }
 
   void _borrar() {

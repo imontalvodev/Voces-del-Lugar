@@ -67,6 +67,7 @@ class ContarPageState extends State<ContarPage> {
   final _parentesco = TextEditingController();
   final _desplazamiento = ScrollController();
   Grabacion? _grabacion;
+  final _grabador = GlobalKey<GrabadorState>();
   PlatformFile? _archivo;
   bool _intentoSitio = false;
   bool _intentoHistoria = false;
@@ -178,15 +179,20 @@ class ContarPageState extends State<ContarPage> {
 
   bool get _historiaLista => _hayHistoria && _titulo.text.trim().isNotEmpty && _b.tipo != null;
 
-  void _irA(int paso) {
+  Future<void> _irA(int paso) async {
+    // Lo que se está grabando se termina y se queda, no se pierde al salir del paso.
+    await _grabador.currentState?.terminarSiGraba();
+    if (!mounted) return;
     _cambiar(() => _paso = paso);
     if (_desplazamiento.hasClients) _desplazamiento.jumpTo(0);
   }
 
-  void _siguiente() {
+  Future<void> _siguiente() async {
+    if (_paso == 2) await _grabador.currentState?.terminarSiGraba();
+    if (!mounted) return;
     if (_paso == 1 && !_sitioListo) return setState(() => _intentoSitio = true);
     if (_paso == 2 && !_historiaLista) return setState(() => _intentoHistoria = true);
-    _irA(_paso + 1);
+    await _irA(_paso + 1);
   }
 
   /// Atrás del sistema o del asistente: paso anterior; en el primero, pregunta.
@@ -659,7 +665,13 @@ class ContarPageState extends State<ContarPage> {
         const TituloPantalla('Cuéntala'),
         const Entradilla('Con grabarla basta. Si lo prefieres, puedes escribirla o subir una grabación que ya tengas.'),
         const SizedBox(height: 16),
-        _Modos(modo: _b.modo, onModo: (m) => _cambiar(() => _b.modo = m)),
+        _Modos(
+          modo: _b.modo,
+          onModo: (m) async {
+            await _grabador.currentState?.terminarSiGraba();
+            if (mounted) _cambiar(() => _b.modo = m);
+          },
+        ),
         const SizedBox(height: 16),
         switch (_b.modo) {
           'escribir' => CampoTexto(
@@ -674,6 +686,7 @@ class ContarPageState extends State<ContarPage> {
             onQuitar: () => setState(() => _archivo = null),
           ),
           _ => Grabador(
+            key: _grabador,
             grabacion: _grabacion,
             onCambio: (g) => _cambiar(() => _grabacion = g),
             onEscribir: () => _cambiar(() => _b.modo = 'escribir'),
@@ -695,7 +708,13 @@ class ContarPageState extends State<ContarPage> {
           onChanged: (_) => setState(() {}),
         ),
         const SizedBox(height: 18),
-        Text('¿Qué tipo de historia es?', style: letra.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w700)),
+        // El grupo de abajo ya lo dice al lector; aquí solo se ve.
+        ExcludeSemantics(
+          child: Text(
+            '¿Qué tipo de historia es?',
+            style: letra.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
+          ),
+        ),
         const SizedBox(height: 8),
         Semantics(
           container: true,

@@ -1,14 +1,19 @@
 import 'dart:convert';
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voces/api.dart';
 import 'package:voces/borrador.dart';
 import 'package:voces/pages/contar_page.dart';
+import 'package:voces/permisos.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
 
@@ -56,6 +61,7 @@ Future<_Llamadas> _asistente(WidgetTester tester, {bool conCuenta = true}) async
         home: ContarPage(
           api: api,
           conTeselas: false,
+          permisoMicro: () async => EstadoPermiso.concedido,
           onSalir: () => llamadas.salidas++,
           onVerLoHecho: () => llamadas.verLoHecho++,
         ),
@@ -78,6 +84,54 @@ Future<void> _marcarSitio(WidgetTester tester) async {
   await tester.tapAt(tester.getCenter(find.byType(FlutterMap)));
   await tester.pump(const Duration(milliseconds: 400));
   await tester.pumpAndSettle();
+}
+
+/// Un micrófono de mentira: «graba» en un archivo de verdad del directorio temporal.
+class _MicroFalso extends RecordPlatform {
+  _MicroFalso(this.dir);
+
+  final Directory dir;
+  String? ruta;
+  var paradas = 0;
+
+  @override
+  Future<void> create(String recorderId) async {}
+  @override
+  Future<bool> hasPermission(String recorderId, {bool request = true}) async => true;
+  @override
+  Future<void> start(String recorderId, RecordConfig config, {required String path}) async => ruta = path;
+  @override
+  Future<String?> stop(String recorderId) async {
+    paradas++;
+    final r = ruta;
+    if (r != null) File(r).writeAsBytesSync(Uint8List.fromList([1, 2, 3]));
+    return r;
+  }
+
+  @override
+  Future<void> pause(String recorderId) async {}
+  @override
+  Future<void> resume(String recorderId) async {}
+  @override
+  Future<bool> isRecording(String recorderId) async => ruta != null;
+  @override
+  Future<bool> isPaused(String recorderId) async => false;
+  @override
+  Future<void> dispose(String recorderId) async {}
+  @override
+  Future<void> cancel(String recorderId) async {}
+  @override
+  Future<Amplitude> getAmplitude(String recorderId) async => Amplitude(current: -20, max: -10);
+  @override
+  Future<bool> isEncoderSupported(String recorderId, AudioEncoder encoder) async => true;
+  @override
+  Future<List<InputDevice>> listInputDevices(String recorderId) async => [];
+  @override
+  Future<Stream<Uint8List>> startStream(String recorderId, RecordConfig config) async => const Stream.empty();
+  @override
+  Stream<RecordState> onStateChanged(String recorderId) => const Stream.empty();
+  @override
+  void setOnConfigChanged(String recorderId, void Function(RecordConfig config)? handler) {}
 }
 
 void main() {
@@ -192,5 +246,51 @@ void main() {
     expect(llamadas.peticiones, isEmpty);
     await _pulsar(tester, 'Volver');
     expect(find.text('Quien cuenta la historia decide si se publica y cómo se puede usar.'), findsOneWidget);
+  });
+
+  testWidgets('si se vuelve atrás a mitad de grabar, lo grabado se termina y se guarda', (tester) async {
+    final dir = Directory.systemTemp.createTempSync('voces-grabar');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final micro = _MicroFalso(dir);
+    final antes = RecordPlatform.instance;
+    RecordPlatform.instance = micro;
+    addTearDown(() => RecordPlatform.instance = antes);
+    const canal = MethodChannel('plugins.flutter.io/path_provider');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(canal, (_) async => dir.path);
+    addTearDown(() => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(canal, null));
+
+    await _asistente(tester);
+    await _marcarSitio(tester);
+    await tester.enterText(find.byType(TextField).last, 'La fuente');
+    await _pulsar(tester, 'Siguiente: historia');
+    await tester.tap(find.bySemanticsLabel('Empezar a grabar'));
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('Grabando'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    // Parar y leer el archivo es E/S de verdad: se le deja tiempo real.
+    for (var i = 0; i < 5; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(find.text('¿Dónde pasó?'), findsOneWidget);
+    expect(micro.paradas, 1);
+
+    await _pulsar(tester, 'Siguiente: historia');
+    expect(find.text('Grabación terminada'), findsOneWidget);
+    final borrador = await Borrador.cargar();
+    expect(borrador!.audioRuta, micro.ruta);
+  });
+
+  testWidgets('el lector dice una sola vez «¿Qué tipo de historia es?»', (tester) async {
+    final semantica = tester.ensureSemantics();
+    await _asistente(tester);
+    await _marcarSitio(tester);
+    await tester.enterText(find.byType(TextField).last, 'La fuente');
+    await _pulsar(tester, 'Siguiente: historia');
+    expect(find.bySemanticsLabel('¿Qué tipo de historia es?'), findsOneWidget);
+    semantica.dispose();
   });
 }
