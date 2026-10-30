@@ -133,6 +133,22 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     });
   }
 
+  /// Abre el mapa en un lugar con su vista previa («Ver en el mapa»).
+  void mostrarLugar(String lugarId, LatLng punto) {
+    _moves++;
+    setState(() {
+      _lugarId = lugarId;
+      _pin = null;
+      _lista = false;
+      _colocando = false;
+    });
+    if (_ready) {
+      _flyTo(punto, 16);
+    } else {
+      setState(() => _inicio = (centro: punto, zoom: 16));
+    }
+  }
+
   List<Lugar> get _lugares => lugaresDe(_stories);
 
   Lugar? get _lugar => _lugares.where((l) => l.id == _lugarId).firstOrNull;
@@ -832,7 +848,7 @@ class _VistaPrevia extends StatelessWidget {
                   etiqueta: h.hasAudio ? (duracion == null ? 'Escuchar' : 'Escuchar · $duracion') : 'Leer la historia',
                   icono: h.hasAudio ? LucideIcons.play : LucideIcons.bookOpenText,
                   expandir: !compacta,
-                  onPressed: () => openStory(context, h),
+                  onPressed: () => openStory(context, h, escuchar: h.hasAudio),
                 ),
               ),
             ],

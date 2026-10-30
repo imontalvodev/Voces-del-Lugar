@@ -89,3 +89,21 @@ String? duracionCorta(int? segundos) {
   if (segundos == null) return null;
   return '${segundos ~/ 60}:${(segundos % 60).toString().padLeft(2, '0')}';
 }
+
+/// La licencia explicada en lenguaje llano, como en el paso «Permiso».
+({String nombre, String detalle}) licenciaLlana(String license) {
+  return switch (license) {
+    'CC-BY-4.0' => (
+      nombre: 'Citando la fuente',
+      detalle: 'Cualquiera puede usarla para lo que quiera, siempre que diga de dónde la sacó.',
+    ),
+    'CC0-1.0' => (
+      nombre: 'Dominio público',
+      detalle: 'Cualquiera puede usarla sin pedir permiso ni citar. Es como regalarla a todos.',
+    ),
+    _ => (
+      nombre: 'Compartir igual',
+      detalle: 'Cualquiera puede usarla y adaptarla si cita la fuente y la comparte con esta misma licencia.',
+    ),
+  };
+}

@@ -4,6 +4,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:voces/api.dart';
 import 'package:voces/links.dart';
 import 'package:voces/story_format.dart';
+import 'package:voces/theme/vdl_colors.dart';
+import 'package:voces/theme/vdl_theme.dart';
+
+final _tema = vdlTheme(VdlColors.claro, Brightness.light);
 
 StoryPin pin({String id = 'abc', String title = 'La fuente', int? decade}) => StoryPin(
       id: id,
@@ -55,14 +59,14 @@ void main() {
 
   group('StoryLoader', () {
     testWidgets('abre la historia del enlace cuando llega', (tester) async {
-      await tester.pumpWidget(MaterialApp(home: StoryLoader(id: 'abc', load: (_) async => pin(title: 'El sereno'), page: (s) => Text(s.title))));
+      await tester.pumpWidget(MaterialApp(theme: _tema, home: StoryLoader(id: 'abc', load: (_) async => pin(title: 'El sereno'), page: (s) => Text(s.title))));
       await tester.pump();
       expect(find.text('El sereno'), findsOneWidget);
       await settleAnimations(tester);
     });
 
     testWidgets('si la historia no está, lo dice y ofrece volver al inicio', (tester) async {
-      await tester.pumpWidget(MaterialApp(home: StoryLoader(id: 'nada', load: (_) async => throw ApiException('No está esa historia'), page: (s) => Text(s.title))));
+      await tester.pumpWidget(MaterialApp(theme: _tema, home: StoryLoader(id: 'nada', load: (_) async => throw ApiException('No está esa historia'), page: (s) => Text(s.title))));
       await tester.pump();
       expect(find.text('Esta historia no está'), findsOneWidget);
       expect(find.text('Ir al inicio'), findsOneWidget);

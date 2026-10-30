@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
 import 'package:voces/pages/story_page.dart';
-import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/tokens.dart';
+import 'package:voces/ui/estados.dart';
+import 'package:voces/ui/pagina.dart';
 
 /// La dirección propia de cada historia, para poder compartirla.
 String storyPath(String id) => '/historia/$id';
@@ -18,14 +17,15 @@ String? storyIdFromPath(String? path) {
 
 /// Abre una historia dejando su dirección en la barra del navegador, así el
 /// botón de atrás vuelve donde se estaba y el enlace se puede pasar a otro.
-Future<void> openStory(BuildContext context, StoryPin story) {
-  return Navigator.push(context, storyRoute(story));
+/// Con [escuchar], el audio empieza a sonar al abrirla.
+Future<void> openStory(BuildContext context, StoryPin story, {bool escuchar = false}) {
+  return Navigator.push(context, storyRoute(story, escuchar: escuchar));
 }
 
-Route<void> storyRoute(StoryPin story) {
+Route<void> storyRoute(StoryPin story, {bool escuchar = false}) {
   return MaterialPageRoute<void>(
     settings: RouteSettings(name: storyPath(story.id)),
-    builder: (_) => StoryPage(story: story),
+    builder: (_) => StoryPage(story: story, escuchar: escuchar),
   );
 }
 
@@ -67,45 +67,13 @@ class _StoryLoaderState extends State<StoryLoader> {
       builder: (context, snapshot) {
         final story = snapshot.data;
         if (story != null) return (widget.page ?? (s) => StoryPage(story: s))(story);
-        return Scaffold(
-          backgroundColor: Palette.night,
-          body: Center(
-            child: snapshot.hasError ? const _Missing() : const SizedBox(width: 280, child: LoadingSlab(height: 120)),
+        if (snapshot.hasError) return const HistoriaNoEsta();
+        return const Scaffold(
+          body: SafeArea(
+            child: MargenPagina(ancho: 720, child: Cargando(texto: 'Abriendo la historia…', bloques: 1)),
           ),
         );
       },
-    );
-  }
-}
-
-class _Missing extends StatelessWidget {
-  const _Missing();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Esta historia no está', style: display(44)),
-            const SizedBox(height: 12),
-            Text(
-              'Puede que la hayan retirado para revisarla o que el enlace llegara cortado. Las demás siguen en el mapa.',
-              style: text(color: Palette.haze),
-            ),
-            const SizedBox(height: 24),
-            LampButton(
-              label: 'Ir al inicio',
-              icon: LucideIcons.house,
-              onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

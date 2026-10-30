@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/ui/barra_inferior.dart';
@@ -258,4 +259,14 @@ class _Observador extends NavigatorObserver {
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) => _avisar();
+}
+
+/// Una petición de ir a una sección (y, en el mapa, a un lugar) desde una
+/// pantalla que no cuelga de la shell, como «Esta historia no está».
+typedef Rumbo = ({Seccion seccion, String? lugarId, LatLng? punto});
+
+final rumbo = ValueNotifier<Rumbo?>(null);
+
+void irA(Seccion seccion, {String? lugarId, LatLng? punto}) {
+  rumbo.value = (seccion: seccion, lugarId: lugarId, punto: punto);
 }

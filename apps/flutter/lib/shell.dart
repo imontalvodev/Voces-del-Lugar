@@ -32,6 +32,33 @@ class _AppShellState extends State<AppShell> {
 
   NavigatorState? get _pila => _pilas[_seccion]!.currentState;
 
+  @override
+  void initState() {
+    super.initState();
+    rumbo.addListener(_seguirRumbo);
+  }
+
+  @override
+  void dispose() {
+    rumbo.removeListener(_seguirRumbo);
+    super.dispose();
+  }
+
+  /// Otra pantalla pide ir a una sección o a un lugar del mapa.
+  void _seguirRumbo() {
+    final pedido = rumbo.value;
+    if (pedido == null || !mounted) return;
+    rumbo.value = null;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    _pilas[pedido.seccion]!.currentState?.popUntil((route) => route.isFirst);
+    if (pedido.seccion != _seccion) _ir(pedido.seccion);
+    final lugar = pedido.lugarId;
+    final punto = pedido.punto;
+    if (pedido.seccion == Seccion.mapa && lugar != null && punto != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _mapKey.currentState?.mostrarLugar(lugar, punto));
+    }
+  }
+
   void _ir(Seccion seccion) {
     if (seccion == _seccion) {
       _pila?.popUntil((route) => route.isFirst);

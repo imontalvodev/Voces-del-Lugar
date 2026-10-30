@@ -1,25 +1,40 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
 import 'package:voces/links.dart';
+import 'package:voces/navegacion.dart';
 import 'package:voces/story_format.dart';
-import 'package:voces/ui/audio.dart';
-import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/story_card.dart';
-import 'package:voces/ui/tokens.dart';
+import 'package:voces/theme/vdl_colors.dart';
+import 'package:voces/theme/vdl_theme.dart';
+import 'package:voces/ui/avisos.dart';
+import 'package:voces/ui/campos.dart';
+import 'package:voces/ui/pagina.dart';
+import 'package:voces/ui/placa.dart';
+import 'package:voces/ui/placa_mapa.dart';
+import 'package:voces/ui/reproductor.dart';
+import 'package:voces/ui/sello.dart';
+import 'package:voces/ui/teselas.dart';
 
+/// Ficha de una historia: datos a máquina, reproductor, lo que cuenta, la
+/// licencia en lenguaje llano y el enlace. Quien la subió la corrige y quien
+/// modera la publica, la rechaza o la retira.
 class StoryPage extends StatefulWidget {
-  const StoryPage({super.key, required this.story});
+  const StoryPage({super.key, required this.story, this.escuchar = false, this.conTeselas = true});
 
   final StoryPin story;
+
+  /// Llega desde «Escuchar»: el audio empieza a sonar.
+  final bool escuchar;
+  final bool conTeselas;
 
   @override
   State<StoryPage> createState() => _StoryPageState();
 }
 
 class _StoryPageState extends State<StoryPage> {
-  final _energy = ValueNotifier<double>(0.35);
   late StoryPin _story = widget.story;
   VocesApi? _api;
   bool _busy = false;
@@ -43,18 +58,10 @@ class _StoryPageState extends State<StoryPage> {
   @override
   void dispose() {
     _api?.changes.removeListener(_onChanged);
-    _energy.dispose();
     super.dispose();
   }
 
-  Future<void> _copyLink() async {
-    await Clipboard.setData(ClipboardData(text: storyLink(_story.id, Uri.base)));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Enlace copiado. Quien lo abra llega a esta historia.')));
-  }
-
-  /// La tarjeta pudo quedarse vieja: se trae la ficha como está ahora.
+  /// La ficha pudo quedarse vieja: se trae como está ahora.
   Future<void> _fetch() async {
     try {
       final fresh = await _api!.story(widget.story.id);
@@ -64,42 +71,62 @@ class _StoryPageState extends State<StoryPage> {
     }
   }
 
-  Future<void> _run(Future<StoryPin> Function(VocesApi api) action, String done) async {
+  Future<void> _copiar() async {
+    await Clipboard.setData(ClipboardData(text: enlacePublico(_story.id)));
+    if (mounted) mostrarNotificacion(context, 'Enlace copiado. Ya puedes pegarlo donde quieras.');
+  }
+
+  Future<void> _run(
+    Future<StoryPin> Function(VocesApi api) action,
+    String hecho, {
+    String? deshacer,
+    Future<StoryPin> Function(VocesApi api)? alDeshacer,
+  }) async {
     final api = _api;
     if (api == null || _busy) return;
     setState(() => _busy = true);
-    final messenger = ScaffoldMessenger.of(context);
     try {
       final updated = await action(api);
       if (!mounted) return;
       setState(() => _story = updated);
-      messenger.showSnackBar(SnackBar(content: Text(done)));
+      HapticFeedback.mediumImpact();
+      mostrarNotificacion(
+        context,
+        hecho,
+        accion: deshacer,
+        onAccion: alDeshacer == null ? null : () => _run(alDeshacer, 'Hecho. Vuelve a estar como antes.'),
+      );
     } on ApiException catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+      if (mounted) mostrarNotificacion(context, error.message, error: true);
     } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text('No hay conexión con el archivo.')));
+      if (mounted) mostrarNotificacion(context, 'No hay conexión. Revisa el wifi o los datos.', error: true);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _reject() async {
+  Future<void> _publicar() async {
+    if (!await confirmarPublicar(context, _story)) return;
+    await _run((api) => api.publish(_story.id), 'Publicada. Ya está en el mapa.');
+  }
+
+  Future<void> _rechazar() async {
     if (!await confirmReject(context, _story)) return;
     await _run((api) => api.reject(_story.id), 'Rechazada. No llegará al mapa.');
   }
 
-  Future<void> _unpublish() async {
-    final sure = await confirm(
-      context,
-      title: '¿La quitas del mapa?',
-      message: 'Vuelve a revisión. Nadie más la verá hasta que alguien la publique otra vez.',
-      action: 'Quitarla del mapa',
+  Future<void> _retirar() async {
+    if (!await confirmarRetirar(context, _story)) return;
+    final id = _story.id;
+    await _run(
+      (api) => api.unpublish(id),
+      'Retirada. Ya no está en el mapa.',
+      deshacer: 'Deshacer',
+      alDeshacer: (api) => api.publish(id),
     );
-    if (!sure) return;
-    await _run((api) => api.unpublish(_story.id), 'Retirada del mapa. Queda en revisión.');
   }
 
-  Future<void> _edit() async {
+  Future<void> _corregir() async {
     final patch = await editStory(context, _story);
     if (patch == null) return;
     String? changed(String value, String? before) => value == (before ?? '').trim() ? null : value;
@@ -114,153 +141,329 @@ class _StoryPageState extends State<StoryPage> {
     );
   }
 
-  List<Widget> _actions() {
-    final api = _api;
-    final account = api?.account;
-    if (api == null || account == null) return const [];
-    final story = _story;
-    return [
-      if (account.canModerate && story.pending) ...[
-        LampButton(
-          label: 'Publicar en el mapa',
-          icon: LucideIcons.check,
-          busy: _busy,
-          onPressed: () => _run((api) => api.publish(story.id), 'Publicada. Ya está en el mapa.'),
-        ),
-        GhostButton(label: 'Rechazar', icon: LucideIcons.x, onPressed: _busy ? null : _reject),
-      ],
-      if (account.canModerate && story.published)
-        GhostButton(label: 'Quitar del mapa', icon: LucideIcons.eyeOff, onPressed: _busy ? null : _unpublish),
-      if (story.status == 'rejected' && account.canModerate)
-        GhostButton(
-          label: 'Publicar de todos modos',
-          icon: LucideIcons.check,
-          onPressed: _busy ? null : () => _run((api) => api.publish(story.id), 'Publicada. Ya está en el mapa.'),
-        ),
-      if (api.owns(story) && story.pending)
-        GhostButton(label: 'Corregir', icon: LucideIcons.pencil, onPressed: _busy ? null : _edit),
+  @override
+  Widget build(BuildContext context) {
+    final amplio = tamano(context) == Vdl.amplio;
+    final ficha = _Ficha(
+      story: _story,
+      escuchar: widget.escuchar,
+      onCopiar: _copiar,
+      onCorregir: (_api?.owns(_story) ?? false) && _story.pending && !_busy ? _corregir : null,
+    );
+    final lateral = [
+      _DondePaso(story: _story, conTeselas: widget.conTeselas),
+      if (_api?.account?.canModerate ?? false)
+        _Moderacion(story: _story, busy: _busy, onPublicar: _publicar, onRechazar: _rechazar, onRetirar: _retirar),
     ];
+    return Scaffold(
+      body: SafeArea(
+        bottom: false,
+        child: SingleChildScrollView(
+          child: MargenPagina(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                EnlaceDiscreto(
+                  etiqueta: 'Volver',
+                  icono: Theme.of(context).platform == TargetPlatform.iOS
+                      ? LucideIcons.chevronLeft
+                      : LucideIcons.arrowLeft,
+                  onPressed: () => Navigator.maybePop(context),
+                ),
+                const SizedBox(height: 6),
+                if (amplio)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: ficha),
+                      const SizedBox(width: 40),
+                      SizedBox(
+                        width: 360,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Column(
+                            children: [
+                              for (final (i, w) in lateral.indexed) ...[if (i > 0) const SizedBox(height: 20), w],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                else ...[
+                  ficha,
+                  for (final w in lateral) ...[const SizedBox(height: 24), w],
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
+}
+
+class _Ficha extends StatelessWidget {
+  const _Ficha({required this.story, required this.escuchar, required this.onCopiar, required this.onCorregir});
+
+  final StoryPin story;
+  final bool escuchar;
+  final VoidCallback onCopiar;
+  final VoidCallback? onCorregir;
 
   @override
   Widget build(BuildContext context) {
-    final story = _story;
-    final actions = _actions();
-    final width = MediaQuery.sizeOf(context).width;
-    final titleSize = width < 600 ? 46.0 : 72.0;
-    final body = story.body?.trim() ?? '';
-    return Scaffold(
-      backgroundColor: Palette.night,
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: width < 600 ? 280 : 360,
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 16,
-                    top: 0,
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: GlassIconButton(
-                          icon: LucideIcons.arrowLeft,
-                          tooltip: 'Volver',
-                          onPressed: () => Navigator.maybePop(context),
+    final c = VdlColors.of(context);
+    final letra = Theme.of(context).textTheme;
+    final amplio = tamano(context) == Vdl.amplio;
+    final cuerpo = (story.body ?? '').trim();
+    final parrafos = cuerpo.split(RegExp(r'\n\s*\n')).map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+    final licencia = licenciaLlana(story.license);
+    final estado = story.published ? null : EstadoSello.deStatus(story.status);
+    final filas = <(String, Widget)>[
+      ('Lugar', Text(story.placeName)),
+      ('Tipo', EtiquetaTipo(story.category, color: c.tinta)),
+      if (decadeLabel(story.decade) case final epoca?) ('Época', Text(epoca)),
+      ('Contada por', Text(contadaPor(story.narratorName, story.narratorRelation, deceased: story.narratorDeceased))),
+      if (story.authorName case final autor? when autor.trim().isNotEmpty) ('Recogida por', Text(autor)),
+    ];
+    return Padding(
+      padding: EdgeInsets.only(top: story.number == null ? 0 : 16),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: amplio ? const EdgeInsets.fromLTRB(32, 32, 32, 28) : const EdgeInsets.fromLTRB(18, 24, 18, 20),
+            decoration: BoxDecoration(
+              color: c.azulejo,
+              border: Border.all(color: c.tinta, width: 1.5),
+              borderRadius: BorderRadius.circular(2),
+              boxShadow: [BoxShadow(color: c.sombra, offset: const Offset(4, 4))],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (story.narratorDeceased || estado != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: [
+                        if (estado != null) Sello(estado, grande: true),
+                        if (story.narratorDeceased) const Sello(EstadoSello.permisoFamilia, grande: true),
+                      ],
+                    ),
+                  ),
+                if (story.narratorDeceased || estado != null) const SizedBox(height: 10),
+                TituloPantalla(story.title),
+                const SizedBox(height: 16),
+                for (final (dato, valor) in filas)
+                  Container(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: c.filete, width: 1.5)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 130,
+                          child: Text(
+                            dato,
+                            style: registro.copyWith(fontSize: 16, fontWeight: FontWeight.w400, color: c.piedra),
+                          ),
                         ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DefaultTextStyle.merge(
+                            style: registro.copyWith(fontSize: 17, color: c.tinta),
+                            child: valor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (story.hasAudio) ...[
+                  const SizedBox(height: 20),
+                  Reproductor(url: story.mediaUrls.first, titulo: story.title, empezar: escuchar),
+                ],
+                if (parrafos.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  if (story.hasAudio)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Semantics(
+                        header: true,
+                        child: Text('Lo que cuenta', style: letra.bodyMedium!.copyWith(fontWeight: FontWeight.w800)),
+                      ),
+                    ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 680),
+                    child: SelectionArea(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          for (final (i, p) in parrafos.indexed)
+                            Padding(
+                              padding: EdgeInsets.only(top: i == 0 ? 0 : 12),
+                              child: Text(p, style: letra.bodyLarge),
+                            ),
+                        ],
                       ),
                     ),
                   ),
-                  if (story.published)
-                    Positioned(
-                      right: 16,
-                      top: 0,
-                      child: SafeArea(
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: GlassIconButton(
-                            icon: LucideIcons.link,
-                            tooltip: 'Copiar enlace',
-                            onPressed: _copyLink,
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(width < 600 ? 22 : 32, 0, width < 600 ? 22 : 32, 72),
+                const SizedBox(height: 22),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: c.ficha,
+                    border: Border.all(color: c.tinta, width: 1.5),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 6,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(LucideIcons.mapPin, size: 17, color: Palette.lamp),
-                              const SizedBox(width: 6),
-                              Text(
-                                story.placeName,
-                                style: text(size: 16, weight: FontWeight.w600, color: Palette.lamp),
-                              ),
-                            ],
-                          ),
-                          Text(coordinateLabel(story.point), style: text(size: 13.5, color: Palette.haze)),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(story.title, style: display(titleSize)),
-                      const SizedBox(height: 16),
-                      Text(narratorLine(story), style: text(size: 18, color: Palette.bone.withValues(alpha: 0.86))),
-                      if ((story.narratorRelation ?? '').trim().isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(story.narratorRelation!.trim(), style: text(size: 15, color: Palette.haze)),
-                      ],
-                      if (story.mediaUrls.isNotEmpty) ...[
-                        const SizedBox(height: 32),
-                        StoryPlayer(url: story.mediaUrls.first, seed: story.id, energy: _energy),
-                      ],
-                      if (body.isNotEmpty) ...[
-                        const SizedBox(height: 36),
-                        SelectableText(
-                          body,
-                          style: text(size: 19, height: 1.72, color: Palette.bone.withValues(alpha: 0.94)),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(text: licenseLabel(story.license), style: registro.copyWith(fontSize: 17)),
+                            TextSpan(text: ' · ${licencia.nombre}'),
+                          ],
                         ),
-                      ],
-                      const SizedBox(height: 44),
-                      Container(height: 1, color: Palette.glassEdge),
-                      const SizedBox(height: 20),
-                      Wrap(
-                        spacing: 14,
-                        runSpacing: 10,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          StatusChip(status: story.status),
-                          Text(categoryLabel(story.category), style: text(size: 14, color: Palette.haze)),
-                          if (decadeLabel(story.decade) case final decade?)
-                            Text(decade, style: text(size: 14, color: Palette.haze)),
-                          Text('Licencia ${licenseLabel(story.license)}', style: text(size: 14, color: Palette.haze)),
-                        ],
+                        style: letra.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
                       ),
-                      if (actions.isNotEmpty) ...[
-                        const SizedBox(height: 28),
-                        Wrap(spacing: 12, runSpacing: 12, children: actions),
-                      ],
+                      const SizedBox(height: 4),
+                      Text(licencia.detalle, style: letra.bodySmall!.copyWith(color: c.piedra)),
                     ],
                   ),
                 ),
+                const SizedBox(height: 18),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    BotonPlaca(
+                      etiqueta: 'Copiar enlace',
+                      icono: LucideIcons.link2,
+                      expandir: !amplio,
+                      onPressed: onCopiar,
+                    ),
+                    if (onCorregir != null)
+                      BotonPlaca(
+                        etiqueta: 'Corregir',
+                        icono: LucideIcons.penLine,
+                        variante: VarianteBoton.secundario,
+                        expandir: !amplio,
+                        onPressed: onCorregir,
+                      ),
+                    SizedBox(
+                      width: amplio ? null : double.infinity,
+                      child: Text(
+                        enlacePublico(story.id).replaceFirst(RegExp(r'^https?://'), ''),
+                        textAlign: amplio ? TextAlign.start : TextAlign.center,
+                        style: registro.copyWith(fontSize: 16, fontWeight: FontWeight.w400, color: c.piedra),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (story.number != null)
+            Positioned(
+              top: -15,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+                decoration: BoxDecoration(
+                  color: c.azulejo,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                  border: Border(
+                    top: BorderSide(color: c.tinta, width: 1.5),
+                    left: BorderSide(color: c.tinta, width: 1.5),
+                    right: BorderSide(color: c.tinta, width: 1.5),
+                  ),
+                ),
+                child: Text(
+                  numeroFicha(story.number!),
+                  style: registro.copyWith(fontSize: 15, height: 1.6, color: c.tinta),
+                ),
               ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DondePaso extends StatelessWidget {
+  const _DondePaso({required this.story, required this.conTeselas});
+
+  final StoryPin story;
+  final bool conTeselas;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    final amplio = tamano(context) == Vdl.amplio;
+    final medida = PlacaLugar.medida(story.placeName, MediaQuery.textScalerOf(context));
+    return Semantics(
+      container: true,
+      label: 'Dónde pasó',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              'Dónde pasó',
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontSize: 19, fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            height: amplio ? 300 : 190,
+            decoration: BoxDecoration(
+              border: Border.all(color: c.tinta, width: 2),
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: ClipRect(
+              child: ExcludeSemantics(
+                child: FlutterMap(
+                  options: MapOptions(
+                    initialCenter: story.point,
+                    initialZoom: 16,
+                    backgroundColor: c.cal,
+                    interactionOptions: const InteractionOptions(flags: InteractiveFlag.none),
+                  ),
+                  children: [
+                    if (conTeselas) teselasVdl(context),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: story.point,
+                          width: medida.width,
+                          height: medida.height,
+                          alignment: Alignment.topCenter,
+                          child: PlacaLugar(nombre: story.placeName, recuento: 1, elegida: true, onTap: () {}),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: EnlaceDiscreto(
+              etiqueta: 'Ver en el mapa',
+              onPressed: () => irA(Seccion.mapa, lugarId: story.placeId, punto: story.point),
             ),
           ),
         ],
@@ -269,33 +472,198 @@ class _StoryPageState extends State<StoryPage> {
   }
 }
 
-/// Pregunta antes de algo que cambia lo que ve todo el mundo.
-Future<bool> confirm(
-  BuildContext context, {
-  required String title,
-  required String message,
-  required String action,
-}) async {
-  final answer = await showDialog<bool>(
-    context: context,
-    builder: (context) => _GlassDialog(
-      title: title,
-      body: Text(message, style: text(size: 15.5, color: Palette.haze)),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-        LampButton(label: action, onPressed: () => Navigator.pop(context, true)),
+class _Moderacion extends StatelessWidget {
+  const _Moderacion({
+    required this.story,
+    required this.busy,
+    required this.onPublicar,
+    required this.onRechazar,
+    required this.onRetirar,
+  });
+
+  final StoryPin story;
+  final bool busy;
+  final VoidCallback onPublicar;
+  final VoidCallback onRechazar;
+  final VoidCallback onRetirar;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    final letra = Theme.of(context).textTheme;
+    final acciones = <Widget>[
+      if (story.pending) ...[
+        BotonPlaca(
+          etiqueta: 'Publicar en el mapa',
+          icono: LucideIcons.check,
+          tamano: TamanoBoton.medio,
+          expandir: true,
+          cargando: busy ? 'Guardando…' : null,
+          onPressed: onPublicar,
+        ),
+        BotonPlaca(
+          etiqueta: 'Rechazar',
+          variante: VarianteBoton.peligroBorde,
+          tamano: TamanoBoton.medio,
+          expandir: true,
+          onPressed: busy ? null : onRechazar,
+        ),
       ],
-    ),
-  );
-  return answer ?? false;
+      if (story.published)
+        BotonPlaca(
+          etiqueta: 'Retirar del mapa',
+          variante: VarianteBoton.peligroBorde,
+          tamano: TamanoBoton.medio,
+          expandir: true,
+          onPressed: busy ? null : onRetirar,
+        ),
+    ];
+    if (acciones.isEmpty) return const SizedBox.shrink();
+    return CustomPaint(
+      painter: BordeSello(color: c.filete, discontinuo: true, grosor: 1.5, radio: 2),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Herramientas de moderación',
+              style: letra.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text('Solo lo ves porque moderas el archivo.', style: letra.bodySmall!.copyWith(color: c.piedra)),
+            const SizedBox(height: 10),
+            for (final (i, a) in acciones.indexed) ...[if (i > 0) const SizedBox(height: 10), a],
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-Future<bool> confirmReject(BuildContext context, StoryPin story) {
-  return confirm(
+/// «Esta historia no está»: el enlace no lleva a ninguna.
+class HistoriaNoEsta extends StatelessWidget {
+  const HistoriaNoEsta({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    final amplio = tamano(context) == Vdl.amplio;
+    void ir(Seccion s) {
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      irA(s);
+    }
+
+    final botones = [
+      BotonPlaca(
+        etiqueta: 'Abrir el mapa',
+        icono: LucideIcons.map,
+        expandir: !amplio,
+        onPressed: () => ir(Seccion.mapa),
+      ),
+      BotonPlaca(
+        etiqueta: 'Ir al inicio',
+        variante: VarianteBoton.secundario,
+        expandir: !amplio,
+        onPressed: () => ir(Seccion.inicio),
+      ),
+    ];
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: MargenPagina(
+            ancho: 720,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 30),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  CustomPaint(
+                    painter: BordeSello(color: c.tinta, discontinuo: true, grosor: 1.5, radio: 2),
+                    child: Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.all(1.5),
+                      color: c.azulejo,
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 36),
+                      child: Column(
+                        children: [
+                          Icon(LucideIcons.searchX, size: 44, color: c.piedra),
+                          const SizedBox(height: 8),
+                          const TituloPantalla('Esta historia no está'),
+                          const SizedBox(height: 10),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 420),
+                            child: Text(
+                              'Puede que el enlace esté mal copiado o que la hayan retirado del mapa.',
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: c.piedra),
+                            ),
+                          ),
+                          const SizedBox(height: 22),
+                          if (amplio)
+                            Wrap(spacing: 10, alignment: WrapAlignment.center, children: botones)
+                          else
+                            Column(children: [botones[0], const SizedBox(height: 10), botones[1]]),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: -15,
+                    left: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: c.azulejo,
+                        border: Border(
+                          top: BorderSide(color: c.tinta, width: 1.5),
+                          left: BorderSide(color: c.tinta, width: 1.5),
+                          right: BorderSide(color: c.tinta, width: 1.5),
+                        ),
+                      ),
+                      child: Text('Nº ----', style: registro.copyWith(fontSize: 15, height: 1.6, color: c.tinta)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// «¿Publicar en el mapa?»
+Future<bool> confirmarPublicar(BuildContext context, StoryPin story) {
+  return confirmar(
     context,
-    title: '¿Rechazar «${story.title}»?',
-    message: 'No llegará al mapa. Quien la dejó la verá como rechazada en su cuenta.',
-    action: 'Rechazar',
+    titulo: '¿Publicar en el mapa?',
+    mensaje: 'Cualquiera podrá ver y escuchar «${story.title}» en ${story.placeName}.',
+    si: 'Sí, publicar en el mapa',
+  );
+}
+
+/// «¿Rechazar esta historia?»
+Future<bool> confirmReject(BuildContext context, StoryPin story) {
+  return confirmar(
+    context,
+    titulo: '¿Rechazar esta historia?',
+    mensaje: '«${story.title}» no llegará al mapa. Quien la dejó la verá como rechazada en su cuenta.',
+    si: 'Sí, rechazar',
+    peligro: true,
+  );
+}
+
+/// «¿Retirar del mapa?»
+Future<bool> confirmarRetirar(BuildContext context, StoryPin story) {
+  return confirmar(
+    context,
+    titulo: '¿Retirar del mapa?',
+    mensaje:
+        '«${story.title}» dejará de verse en el mapa y su enlace dirá que no está. Quien la subió lo verá en su cuenta.',
+    si: 'Sí, retirar del mapa',
+    peligro: true,
   );
 }
 
@@ -305,6 +673,8 @@ typedef StoryEdit = ({String title, String body, String narratorName, String nar
 Future<StoryEdit?> editStory(BuildContext context, StoryPin story) {
   return showDialog<StoryEdit>(
     context: context,
+    barrierColor: VdlColors.of(context).scrim,
+    animationStyle: MediaQuery.disableAnimationsOf(context) ? AnimationStyle.noAnimation : null,
     builder: (_) => _StoryEditor(story: story),
   );
 }
@@ -352,95 +722,55 @@ class _StoryEditorState extends State<_StoryEditor> {
 
   @override
   Widget build(BuildContext context) {
-    return _GlassDialog(
-      title: 'Corregir la historia',
-      body: Column(
+    return DialogoVdl(
+      titulo: 'Corregir la historia',
+      acciones: [
+        BotonPlaca(etiqueta: 'Guardar la corrección', icono: LucideIcons.check, expandir: true, onPressed: _save),
+        BotonPlaca(
+          etiqueta: 'Cancelar',
+          variante: VarianteBoton.secundario,
+          expandir: true,
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          TextField(
+          CampoTexto(
+            etiqueta: 'Título',
             controller: _title,
-            autofocus: true,
-            maxLength: 180,
-            style: text(size: 17),
-            onChanged: (_) {
-              if (_titleError != null) setState(() => _titleError = null);
-            },
-            decoration: InputDecoration(labelText: 'Título', errorText: _titleError),
+            maximo: 180,
+            error: _titleError,
+            onChanged: (_) => _titleError == null ? null : setState(() => _titleError = null),
           ),
-          const SizedBox(height: 14),
-          TextField(
+          const SizedBox(height: 16),
+          CampoTexto(
+            etiqueta: 'Lo que cuenta',
             controller: _body,
-            minLines: 4,
-            maxLines: 10,
-            style: text(size: 16, height: 1.55),
-            onChanged: (_) {
-              if (_bodyError != null) setState(() => _bodyError = null);
-            },
-            decoration: InputDecoration(labelText: 'Qué se contaba', alignLabelWithHint: true, errorText: _bodyError),
+            lineas: 5,
+            error: _bodyError,
+            opcional: widget.story.hasAudio,
+            onChanged: (_) => _bodyError == null ? null : setState(() => _bodyError = null),
           ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _narrator,
-            maxLength: 160,
-            style: text(size: 16),
-            decoration: const InputDecoration(labelText: 'Nombre de quien la cuenta'),
-          ),
-          const SizedBox(height: 14),
-          TextField(
+          const SizedBox(height: 16),
+          CampoTexto(etiqueta: 'Nombre de quien la cuenta', controller: _narrator, maximo: 160, opcional: true),
+          const SizedBox(height: 16),
+          CampoTexto(
+            etiqueta: 'Parentesco',
+            ayuda: 'Por ejemplo: «abuela», «vecino».',
             controller: _relation,
-            maxLength: 80,
-            style: text(size: 16),
-            decoration: const InputDecoration(labelText: 'Qué es para ti'),
+            maximo: 80,
+            opcional: true,
           ),
         ],
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
-        LampButton(label: 'Guardar la corrección', icon: LucideIcons.check, onPressed: _save),
-      ],
     );
   }
 }
 
-class _GlassDialog extends StatelessWidget {
-  const _GlassDialog({required this.title, required this.body, required this.actions});
-
-  final String title;
-  final Widget body;
-  final List<Widget> actions;
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(20),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Glass(
-          radius: 28,
-          tint: Palette.glassStrong,
-          padding: const EdgeInsets.fromLTRB(26, 26, 26, 20),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: display(34)),
-                const SizedBox(height: 16),
-                body,
-                const SizedBox(height: 24),
-                Wrap(
-                  alignment: WrapAlignment.end,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: actions,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+/// El enlace público de una historia: en web, el de la dirección por la que
+/// se entró; en el móvil, el del sitio web del archivo.
+String enlacePublico(String id) {
+  const base = String.fromEnvironment('WEB_BASE', defaultValue: 'https://vocesdellugar.org');
+  return kIsWeb ? storyLink(id, Uri.base) : '$base${storyPath(id)}';
 }
