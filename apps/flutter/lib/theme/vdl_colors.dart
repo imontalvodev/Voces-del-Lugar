@@ -4,14 +4,35 @@ import 'package:flutter/material.dart';
 @immutable
 class VdlColors extends ThemeExtension<VdlColors> {
   const VdlColors({
-    required this.cal, required this.azulejo, required this.ficha,
-    required this.tinta, required this.piedra, required this.filete,
-    required this.anil, required this.anilHondo, required this.anilVelo,
-    required this.ocre, required this.ocreTinta, required this.carmin,
-    required this.verde, required this.sombraBoton,
+    required this.cal,
+    required this.azulejo,
+    required this.ficha,
+    required this.tinta,
+    required this.piedra,
+    required this.filete,
+    required this.anil,
+    required this.anilHondo,
+    required this.anilVelo,
+    required this.ocre,
+    required this.ocreTinta,
+    required this.carmin,
+    required this.verde,
+    required this.sombraBoton,
   });
-  final Color cal, azulejo, ficha, tinta, piedra, filete, anil, anilHondo,
-      anilVelo, ocre, ocreTinta, carmin, verde, sombraBoton;
+  final Color cal,
+      azulejo,
+      ficha,
+      tinta,
+      piedra,
+      filete,
+      anil,
+      anilHondo,
+      anilVelo,
+      ocre,
+      ocreTinta,
+      carmin,
+      verde,
+      sombraBoton;
 
   static const claro = VdlColors(
     cal: Color(0xFFF5F6F3),
