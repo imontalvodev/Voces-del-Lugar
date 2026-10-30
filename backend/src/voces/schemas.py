@@ -96,6 +96,7 @@ class StoryOut(BaseModel):
     created_at: datetime
     published_at: datetime | None
     author_id: UUID
+    author_name: str
     place: PlaceOut
     media: list[MediaOut]
     distance_m: float | None = None

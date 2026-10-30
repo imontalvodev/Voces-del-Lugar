@@ -298,3 +298,24 @@ def test_la_migracion_numera_las_historias_por_antiguedad(client: TestClient):
     assert numbers == {"Primera": 1, "Segunda": 2, "Tercera": 3}
     nueva = client.post("/api/v1/stories", json=_story("Cuarta"), headers=headers).json()
     assert nueva["number"] == 4
+
+
+def test_la_historia_dice_quien_la_recogio(client: TestClient):
+    admin = _register(client, "lucia@example.com", "Lucía Ortega")
+    other = _register(client, "luis@example.com", "Luis")
+    admin_headers = {"Authorization": f"Bearer {admin}"}
+    other_headers = {"Authorization": f"Bearer {other}"}
+    published = client.post("/api/v1/stories", json=_story("La fuente"), headers=admin_headers).json()
+    pending = client.post("/api/v1/stories", json=_story("El cántaro"), headers=other_headers).json()
+    assert published["author_name"] == "Lucía Ortega"
+    client.post(f"/api/v1/stories/{published['id']}/publish", headers=admin_headers)
+
+    detail = client.get(f"/api/v1/stories/{published['id']}").json()
+    mine = client.get("/api/v1/stories/mine", headers=other_headers).json()
+    review = client.get("/api/v1/stories/review", headers=admin_headers).json()
+    on_map = client.get("/api/v1/stories/map", params={"west": -4, "south": 40, "east": -3, "north": 41}).json()
+    assert detail["author_name"] == "Lucía Ortega"
+    assert detail["author_id"] == published["author_id"]
+    assert [item["author_name"] for item in mine] == ["Luis"]
+    assert [(item["id"], item["author_name"]) for item in review] == [(pending["id"], "Luis")]
+    assert [item["author_name"] for item in on_map] == ["Lucía Ortega"]

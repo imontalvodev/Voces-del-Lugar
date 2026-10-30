@@ -30,3 +30,4 @@ Todas las rutas que devuelven historias (`map`, `nearby`, `mine`, `review`, el d
 | Campo | Qué es |
 |---|---|
 | `number` | Número de ficha, correlativo y único. La app lo pinta como «Nº 0142». Las historias anteriores a este campo se numeraron por fecha de creación. |
+| `author_name` | Nombre visible (`display_name`) de la cuenta que subió la historia, junto a `author_id`. La ficha lo enseña como «Recogida por». |

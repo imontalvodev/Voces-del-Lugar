@@ -12,7 +12,7 @@ STORY_COLUMNS = """
     s.id, s.number, s.title, s.body, s.transcript, s.narrator_name, s.narrator_relation,
     s.narrator_consent, s.narrator_deceased, s.consent_recorded_at,
     s.category, s.decade_approx, s.original_language, s.license, s.status,
-    s.created_at, s.published_at, s.author_id,
+    s.created_at, s.published_at, s.author_id, u.display_name AS author_name,
     p.id AS place_id, p.name AS place_name, p.place_type, p.description AS place_description,
     ST_Y(p.location::geometry) AS latitude,
     ST_X(p.location::geometry) AS longitude
@@ -117,6 +117,7 @@ def fetch_story(session: Session, story_id: UUID) -> dict | None:
             SELECT {STORY_COLUMNS}
             FROM stories s
             JOIN places p ON p.id = s.place_id
+            JOIN users u ON u.id = s.author_id
             WHERE s.id = :id
             """
         ),
@@ -132,6 +133,7 @@ def fetch_map(session: Session, west: float, south: float, east: float, north: f
             SELECT {STORY_COLUMNS}
             FROM stories s
             JOIN places p ON p.id = s.place_id
+            JOIN users u ON u.id = s.author_id
             WHERE s.status = 'published'
               AND ST_Intersects(
                     p.location,
@@ -154,6 +156,7 @@ def fetch_nearby(session: Session, lat: float, lng: float, radius_m: float) -> l
                    ST_Distance(p.location, ST_MakePoint(:lng, :lat)::geography) AS distance_m
             FROM stories s
             JOIN places p ON p.id = s.place_id
+            JOIN users u ON u.id = s.author_id
             WHERE s.status = 'published'
               AND ST_DWithin(p.location, ST_MakePoint(:lng, :lat)::geography, :radius)
             ORDER BY distance_m
@@ -172,6 +175,7 @@ def fetch_mine(session: Session, author_id: UUID) -> list[dict]:
             SELECT {STORY_COLUMNS}
             FROM stories s
             JOIN places p ON p.id = s.place_id
+            JOIN users u ON u.id = s.author_id
             WHERE s.author_id = :author_id
             ORDER BY s.created_at DESC
             """
@@ -207,6 +211,7 @@ def fetch_review(session: Session) -> list[dict]:
             SELECT {STORY_COLUMNS}
             FROM stories s
             JOIN places p ON p.id = s.place_id
+            JOIN users u ON u.id = s.author_id
             WHERE s.status = 'pending_review'
             ORDER BY s.created_at
             """
@@ -255,6 +260,7 @@ def to_story(row: dict, media: list[dict]) -> StoryOut:
         created_at=row["created_at"],
         published_at=row["published_at"],
         author_id=row["author_id"],
+        author_name=row["author_name"],
         place={
             "id": row["place_id"],
             "name": row["place_name"],
