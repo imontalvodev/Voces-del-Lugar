@@ -53,6 +53,7 @@ dependencies:
   audio_service: ^0.18.19
   audio_session: ^0.2.4
   flutter_local_notifications: ^22.3.3
+  unifiedpush: ^6.1.0
 
 dev_dependencies:
   flutter_test:

@@ -9,6 +9,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
+import 'package:voces/avisos_push.dart';
 import 'package:voces/borrador.dart';
 import 'package:voces/duraciones.dart';
 import 'package:voces/links.dart';
@@ -25,6 +26,7 @@ import 'package:voces/ui/ficha.dart';
 import 'package:voces/ui/grabador.dart';
 import 'package:voces/ui/pagina.dart';
 import 'package:voces/ui/permiso.dart';
+import 'package:voces/ui/pedir_avisos.dart';
 import 'package:voces/ui/placa.dart';
 import 'package:voces/ui/placa_mapa.dart';
 import 'package:voces/ui/sello.dart';
@@ -919,6 +921,7 @@ class ContarPageState extends State<ContarPage> {
             _publicada ? 'Ya está en el mapa. Cualquiera puede verla y escucharla.' : 'Antes de publicarla la mirará una persona del equipo. Mientras tanto, puedes corregirla desde tu cuenta.',
             style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: c.piedra),
           ),
+          if (!_publicada && AvisosPush.instancia != null) PreguntaAvisos(avisos: AvisosPush.instancia!),
           if (creada != null) ...[
             const SizedBox(height: 18),
             FichaHistoria.de(

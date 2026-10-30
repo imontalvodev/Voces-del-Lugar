@@ -241,6 +241,39 @@ MediaType audioType(String filename) {
   };
 }
 
+/// Qué avisos quiere recibir la cuenta.
+class PrefsAvisos {
+  const PrefsAvisos({required this.lomio, required this.porRevisar});
+
+  /// Cuando se publica o se rechaza lo que ha dejado.
+  final bool lomio;
+
+  /// Cuando hay historias por revisar (solo llega a quien modera).
+  final bool porRevisar;
+
+  factory PrefsAvisos.fromJson(Map<String, dynamic> json) =>
+      PrefsAvisos(lomio: json['notify_own'] as bool, porRevisar: json['notify_review'] as bool);
+}
+
+/// Un sitio del que la cuenta quiere saber lo nuevo que se publica cerca.
+class SitioVigilado {
+  const SitioVigilado({required this.id, required this.nombre, required this.punto, required this.radio});
+
+  final String id;
+  final String nombre;
+  final LatLng punto;
+
+  /// Metros alrededor del punto.
+  final int radio;
+
+  factory SitioVigilado.fromJson(Map<String, dynamic> json) => SitioVigilado(
+    id: json['id'] as String,
+    nombre: json['name'] as String,
+    punto: LatLng((json['latitude'] as num).toDouble(), (json['longitude'] as num).toDouble()),
+    radio: json['radius_m'] as int,
+  );
+}
+
 class VocesApi {
   VocesApi({http.Client? client}) : _http = client ?? http.Client();
 
@@ -447,6 +480,70 @@ class VocesApi {
     _expect(response);
     _touched();
     return StoryPin.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  /// Clave pública VAPID para apuntarse por UnifiedPush, si la API la tiene.
+  Future<String?> pushConfig() async {
+    final response = await _http.get(Uri.parse('$apiBase/api/v1/push/config'));
+    _expect(response);
+    return (jsonDecode(response.body) as Map<String, dynamic>)['vapid_public_key'] as String?;
+  }
+
+  /// Apunta este dispositivo a los avisos de la cuenta con la que se ha entrado.
+  Future<void> registerDevice(Map<String, dynamic> device) async {
+    final response = await _http.put(
+      Uri.parse('$apiBase/api/v1/push/devices'),
+      headers: _jsonAuth,
+      body: jsonEncode(device),
+    );
+    _expect(response);
+  }
+
+  Future<void> removeDevice(String endpoint) async {
+    final response = await _http.delete(
+      Uri.parse('$apiBase/api/v1/push/devices').replace(queryParameters: {'endpoint': endpoint}),
+      headers: _auth,
+    );
+    _expect(response);
+  }
+
+  Future<PrefsAvisos> pushPrefs() async {
+    final response = await _http.get(Uri.parse('$apiBase/api/v1/push/prefs'), headers: _auth);
+    _expect(response);
+    return PrefsAvisos.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<PrefsAvisos> updatePushPrefs({bool? lomio, bool? porRevisar}) async {
+    final response = await _http.patch(
+      Uri.parse('$apiBase/api/v1/push/prefs'),
+      headers: _jsonAuth,
+      body: jsonEncode({'notify_own': ?lomio, 'notify_review': ?porRevisar}),
+    );
+    _expect(response);
+    return PrefsAvisos.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<List<SitioVigilado>> watchedPlaces() async {
+    final response = await _http.get(Uri.parse('$apiBase/api/v1/push/places'), headers: _auth);
+    _expect(response);
+    return [
+      for (final row in jsonDecode(response.body) as List<dynamic>) SitioVigilado.fromJson(row as Map<String, dynamic>),
+    ];
+  }
+
+  Future<SitioVigilado> watchPlace(String name, LatLng point, {int radius = 2000}) async {
+    final response = await _http.post(
+      Uri.parse('$apiBase/api/v1/push/places'),
+      headers: _jsonAuth,
+      body: jsonEncode({'name': name, 'latitude': point.latitude, 'longitude': point.longitude, 'radius_m': radius}),
+    );
+    _expect(response);
+    return SitioVigilado.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> unwatchPlace(String id) async {
+    final response = await _http.delete(Uri.parse('$apiBase/api/v1/push/places/$id'), headers: _auth);
+    _expect(response);
   }
 
   Map<String, String> get _auth {

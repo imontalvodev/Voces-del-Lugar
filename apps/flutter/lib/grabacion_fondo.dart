@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:voces/notis.dart';
 
 /// En Android, grabar con el móvil bloqueado necesita un servicio en primer
 /// plano con su notificación fija: «Grabando», el tiempo y los botones
@@ -10,7 +11,7 @@ class AvisoGrabacion {
   static final instancia = AvisoGrabacion._();
 
   static const _id = 7;
-  final _notis = FlutterLocalNotificationsPlugin();
+  FlutterLocalNotificationsPlugin get _notis => Notis.plugin;
   bool _listo = false;
 
   /// Lo que pide la notificación: «pausar», «seguir» o «terminar».
@@ -20,17 +21,11 @@ class AvisoGrabacion {
 
   Future<void> _preparar() async {
     if (_listo || !_android) return;
-    await _notis.initialize(
-      settings: const InitializationSettings(android: AndroidInitializationSettings('@mipmap/ic_launcher')),
-      onDidReceiveNotificationResponse: (respuesta) {
-        final id = respuesta.actionId;
-        if (id != null) {
-          accion.value = null;
-          accion.value = id;
-        }
-      },
-    );
-    _listo = true;
+    Notis.alBoton = (id) {
+      accion.value = null;
+      accion.value = id;
+    };
+    _listo = await Notis.preparar();
   }
 
   /// Enseña (o actualiza) la notificación fija. Con [pausada], sin cronómetro.

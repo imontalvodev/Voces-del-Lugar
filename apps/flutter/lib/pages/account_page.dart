@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
+import 'package:voces/avisos_push.dart';
 import 'package:voces/links.dart';
 import 'package:voces/pages/entrar_page.dart';
 import 'package:voces/pages/revisar_page.dart';
@@ -10,6 +11,7 @@ import 'package:voces/story_format.dart';
 import 'package:voces/theme/letra.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
+import 'package:voces/ui/ajustes_avisos.dart';
 import 'package:voces/ui/avisos.dart';
 import 'package:voces/ui/estados.dart';
 import 'package:voces/ui/ficha.dart';
@@ -116,6 +118,7 @@ class AccountPageState extends State<AccountPage> {
   }
 
   Future<void> _salir() async {
+    await AvisosPush.instancia?.alSalir();
     await widget.api.logout();
     widget.onChanged();
   }
@@ -142,6 +145,8 @@ class AccountPageState extends State<AccountPage> {
       onSalir: _salir,
     );
     final ajustes = kIsWeb ? null : const _Ajustes();
+    final avisos = AvisosPush.instancia;
+    final ajustesAvisos = (avisos?.disponible ?? false) ? AjustesAvisos(api: widget.api, avisos: avisos!) : null;
     final lista = _LoQueHasDejado(
       historias: _mias,
       cargando: _cargando,
@@ -168,6 +173,7 @@ class AccountPageState extends State<AccountPage> {
                             children: [
                               tarjeta,
                               if (ajustes != null) ...[const SizedBox(height: 24), ajustes],
+                              if (ajustesAvisos != null) ...[const SizedBox(height: 24), ajustesAvisos],
                             ],
                           ),
                         ),
@@ -182,6 +188,7 @@ class AccountPageState extends State<AccountPage> {
                         const SizedBox(height: 28),
                         lista,
                         if (ajustes != null) ...[const SizedBox(height: 28), ajustes],
+                        if (ajustesAvisos != null) ...[const SizedBox(height: 28), ajustesAvisos],
                       ],
                     ),
             ),

@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:voces/api.dart';
+import 'package:voces/avisos_push.dart';
 import 'package:voces/links.dart';
 import 'package:voces/navegacion.dart';
 import 'package:voces/story_format.dart';
@@ -13,6 +14,7 @@ import 'package:voces/theme/vdl_theme.dart';
 import 'package:voces/ui/avisos.dart';
 import 'package:voces/ui/campos.dart';
 import 'package:voces/ui/pagina.dart';
+import 'package:voces/ui/pedir_avisos.dart';
 import 'package:voces/ui/placa.dart';
 import 'package:voces/ui/placa_mapa.dart';
 import 'package:voces/ui/reproductor.dart';
@@ -69,6 +71,28 @@ class _StoryPageState extends State<StoryPage> {
       if (mounted) setState(() => _story = fresh);
     } catch (_) {
       // Se queda lo que ya se ve.
+    }
+  }
+
+  /// Pide que avise de lo que se publique cerca: hace falta cuenta y avisos.
+  Future<void> _vigilar() async {
+    final api = _api;
+    final avisos = AvisosPush.instancia;
+    if (api == null || avisos == null) return;
+    if (api.account == null) {
+      mostrarNotificacion(context, 'Entra en tu cuenta para que te avisemos.', error: true);
+      return;
+    }
+    if (!avisos.activos.value && !await pedirAvisos(context, avisos)) return;
+    try {
+      await api.watchPlace(_story.placeName, _story.point);
+      if (mounted) {
+        mostrarNotificacion(context, 'Te avisaremos de las historias nuevas a 2 km de ${_story.placeName}.');
+      }
+    } on ApiException catch (e) {
+      if (mounted) mostrarNotificacion(context, e.message, error: true);
+    } catch (_) {
+      if (mounted) mostrarNotificacion(context, 'No hay conexión. Revisa el wifi o los datos.', error: true);
     }
   }
 
@@ -164,7 +188,11 @@ class _StoryPageState extends State<StoryPage> {
       onCorregir: (_api?.owns(_story) ?? false) && _story.pending && !_busy ? _corregir : null,
     );
     final lateral = [
-      _DondePaso(story: _story, conTeselas: widget.conTeselas),
+      _DondePaso(
+        story: _story,
+        conTeselas: widget.conTeselas,
+        onVigilar: (AvisosPush.instancia?.disponible ?? false) ? _vigilar : null,
+      ),
       if (_api?.account?.canModerate ?? false)
         _Moderacion(story: _story, busy: _busy, onPublicar: _publicar, onRechazar: _rechazar, onRetirar: _retirar),
     ];
@@ -440,10 +468,13 @@ class _Ficha extends StatelessWidget {
 }
 
 class _DondePaso extends StatelessWidget {
-  const _DondePaso({required this.story, required this.conTeselas});
+  const _DondePaso({required this.story, required this.conTeselas, this.onVigilar});
 
   final StoryPin story;
   final bool conTeselas;
+
+  /// «Avisarme de lo nuevo aquí»; nulo donde no hay avisos.
+  final VoidCallback? onVigilar;
 
   @override
   Widget build(BuildContext context) {
@@ -497,12 +528,16 @@ class _DondePaso extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: EnlaceDiscreto(
-              etiqueta: 'Ver en el mapa',
-              onPressed: () => irA(Seccion.mapa, lugarId: story.placeId, punto: story.point),
-            ),
+          Wrap(
+            spacing: 16,
+            children: [
+              EnlaceDiscreto(
+                etiqueta: 'Ver en el mapa',
+                onPressed: () => irA(Seccion.mapa, lugarId: story.placeId, punto: story.point),
+              ),
+              if (onVigilar != null)
+                EnlaceDiscreto(etiqueta: 'Avisarme de lo nuevo aquí', icono: LucideIcons.bellPlus, onPressed: onVigilar),
+            ],
           ),
         ],
       ),

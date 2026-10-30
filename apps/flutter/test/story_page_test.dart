@@ -4,11 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voces/api.dart';
+import 'package:voces/avisos_push.dart';
 import 'package:voces/pages/story_page.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
 import 'package:voces/ui/reproductor.dart';
+
+import 'apoyo/canal_falso.dart';
 
 Map<String, dynamic> _json({String status = 'published', bool deceased = false, String author = 'u9'}) => {
   'id': 's1',
@@ -34,6 +38,7 @@ Future<List<String>> _ficha(
   String? rol,
   String userId = 'u1',
   Size ventana = const Size(412, 2400),
+  bool avisos = false,
 }) async {
   tester.view.physicalSize = ventana;
   tester.view.devicePixelRatio = 1;
@@ -43,6 +48,13 @@ Future<List<String>> _ficha(
   final api = VocesApi(
     client: MockClient((request) async {
       llamadas.add('${request.method} ${request.url.path}');
+      if (request.url.path.endsWith('/push/places')) {
+        return http.Response(
+          jsonEncode({'id': 'w1', 'name': 'Plaza Mayor', 'latitude': 41.8, 'longitude': -2.4, 'radius_m': 2000}),
+          201,
+        );
+      }
+      if (request.url.path.contains('/push/')) return http.Response(jsonEncode({'vapid_public_key': null}), 200);
       if (request.url.path.endsWith('/unpublish')) actual = {...actual, 'status': 'pending_review'};
       if (request.url.path.endsWith('/publish')) actual = {...actual, 'status': 'published'};
       if (request.url.path.endsWith('/reject')) actual = {...actual, 'status': 'rejected'};
@@ -50,6 +62,11 @@ Future<List<String>> _ficha(
     }),
   );
   if (rol != null) api.account = Account(token: 't', id: userId, displayName: 'Ana', role: rol, email: 'a@b.c');
+  if (avisos) {
+    SharedPreferences.setMockInitialValues({});
+    AvisosPush.instancia = AvisosPush(api: api, canal: CanalFalso());
+    addTearDown(() => AvisosPush.instancia = null);
+  }
   await tester.pumpWidget(
     ApiScope(
       api: api,
@@ -206,5 +223,30 @@ void main() {
     test('las velocidades se escriben con coma', () {
       expect(velocidades.map(etiquetaVelocidad), ['1×', '0,75×', '1,25×']);
     });
+  });
+
+  testWidgets('«Avisarme de lo nuevo aquí» pide los avisos y vigila el sitio', (tester) async {
+    final llamadas = await _ficha(tester, rol: 'contributor', avisos: true);
+    final enlace = find.text('Avisarme de lo nuevo aquí');
+    await tester.ensureVisible(enlace);
+    await tester.tap(enlace);
+    await tester.pumpAndSettle();
+    expect(llamadas, containsAllInOrder(['PUT /api/v1/push/devices', 'POST /api/v1/push/places']));
+    expect(find.text('Te avisaremos de las historias nuevas a 2 km de Plaza Mayor.'), findsOneWidget);
+  });
+
+  testWidgets('sin cuenta, para vigilar un sitio pide entrar', (tester) async {
+    final llamadas = await _ficha(tester, avisos: true);
+    final enlace = find.text('Avisarme de lo nuevo aquí');
+    await tester.ensureVisible(enlace);
+    await tester.tap(enlace);
+    await tester.pumpAndSettle();
+    expect(find.text('Entra en tu cuenta para que te avisemos.'), findsOneWidget);
+    expect(llamadas.where((l) => l.contains('/push/')), isEmpty);
+  });
+
+  testWidgets('donde no hay avisos no se ofrece vigilar', (tester) async {
+    await _ficha(tester, rol: 'contributor');
+    expect(find.text('Avisarme de lo nuevo aquí'), findsNothing);
   });
 }

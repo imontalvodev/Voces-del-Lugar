@@ -11,13 +11,17 @@ import 'package:http/testing.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voces/api.dart';
+import 'package:voces/avisos_push.dart';
 import 'package:voces/borrador.dart';
 import 'package:voces/pages/contar_page.dart';
 import 'package:voces/permisos.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
 
+import 'apoyo/canal_falso.dart';
+
 class _Llamadas {
+  late VocesApi api;
   final peticiones = <http.Request>[];
   var salidas = 0;
   var verLoHecho = 0;
@@ -60,6 +64,7 @@ Future<_Llamadas> _asistente(
     }),
   );
   if (conCuenta) api.account = Account(token: 't', id: 'u1', displayName: 'Ana', role: 'contributor', email: 'a@b.c');
+  llamadas.api = api;
   await tester.pumpWidget(
     ApiScope(
       api: api,
@@ -316,12 +321,15 @@ void main() {
   });
 
   testWidgets('si pasa el filtro se publica sola y lo dice', (tester) async {
-    await _asistente(tester, estado: 'published');
+    final llamadas = await _asistente(tester, estado: 'published');
+    AvisosPush.instancia = AvisosPush(api: llamadas.api, canal: CanalFalso());
+    addTearDown(() => AvisosPush.instancia = null);
     await _rellenar(tester);
     await _pulsar(tester, 'Guardar la historia');
     expect(find.text('Gracias. Tu historia está guardada.'), findsOneWidget);
     expect(find.text('Ya está en el mapa. Cualquiera puede verla y escucharla.'), findsOneWidget);
     expect(find.text('PUBLICADA'), findsOneWidget);
+    expect(find.text('¿Te avisamos cuando se publique?'), findsNothing);
   });
 
   testWidgets('si el filtro no la deja pasar, dice por qué y lleva a corregirla', (tester) async {
@@ -349,5 +357,32 @@ void main() {
       find.text('Antes de publicarla la mirará una persona del equipo. Mientras tanto, puedes corregirla desde tu cuenta.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('si se queda en revisión pregunta si avisar, y al decir que sí apunta el móvil', (tester) async {
+    final llamadas = await _asistente(tester);
+    AvisosPush.instancia = AvisosPush(api: llamadas.api, canal: CanalFalso());
+    addTearDown(() => AvisosPush.instancia = null);
+    await _rellenar(tester);
+    await _pulsar(tester, 'Guardar la historia');
+    expect(find.text('¿Te avisamos cuando se publique?'), findsOneWidget);
+    expect(find.text('Te llegará un aviso a este móvil cuando esté en el mapa, o si no se publica.'), findsOneWidget);
+
+    await _pulsar(tester, 'Sí, avísame');
+    expect(llamadas.peticiones.map((r) => '${r.method} ${r.url.path}'), contains('PUT /api/v1/push/devices'));
+    expect(find.text('¿Te avisamos cuando se publique?'), findsNothing);
+    expect(find.text('Listo. Te avisaremos en este móvil.'), findsOneWidget);
+  });
+
+  testWidgets('sin app de avisos explica qué hace falta', (tester) async {
+    final llamadas = await _asistente(tester);
+    AvisosPush.instancia = AvisosPush(api: llamadas.api, canal: CanalFalso(resultado: ResultadoAvisos.sinDistribuidor));
+    addTearDown(() => AvisosPush.instancia = null);
+    await _rellenar(tester);
+    await _pulsar(tester, 'Guardar la historia');
+    await _pulsar(tester, 'Sí, avísame');
+    expect(find.text('Falta una app de avisos'), findsOneWidget);
+    await _pulsar(tester, 'Entendido');
+    expect(find.text('¿Te avisamos cuando se publique?'), findsOneWidget);
   });
 }

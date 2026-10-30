@@ -6,11 +6,15 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voces/api.dart';
+import 'package:voces/avisos_push.dart';
 import 'package:voces/pages/account_page.dart';
 import 'package:voces/pages/revisar_page.dart';
 import 'package:voces/theme/letra.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
+import 'package:voces/ui/ajustes_avisos.dart';
+
+import 'apoyo/canal_falso.dart';
 
 Map<String, dynamic> _h(String id, String status, {int numero = 12, String? motivo}) => {
   'id': id,
@@ -249,6 +253,87 @@ void main() {
         responder: (_) async => http.Response('[]', 200),
       );
       expect(find.text('Esta parte es solo para moderadores'), findsOneWidget);
+    });
+  });
+
+  group('avisos', () {
+    Future<http.Response> responder(http.Request r) async {
+      final ruta = r.url.path;
+      if (ruta.endsWith('/push/config')) return http.Response(jsonEncode({'vapid_public_key': null}), 200);
+      if (ruta.endsWith('/push/prefs')) {
+        final apagado = r.method == 'PATCH' && (jsonDecode(r.body) as Map)['notify_own'] == false;
+        return http.Response(jsonEncode({'notify_own': !apagado, 'notify_review': true}), 200);
+      }
+      if (ruta.endsWith('/push/places') && r.method == 'GET') {
+        return http.Response(
+          jsonEncode([
+            {'id': 's1', 'name': 'Plaza Mayor', 'latitude': 41.8, 'longitude': -2.4, 'radius_m': 2000},
+          ]),
+          200,
+        );
+      }
+      if (r.method == 'PUT' || r.method == 'DELETE') return http.Response('', 204);
+      return http.Response('[]', 200);
+    }
+
+    Future<(VocesApi, List<String>, AvisosPush)> montarConAvisos(WidgetTester tester, String rol) async {
+      final (api, llamadas) = await _montar(tester, _cuenta, rol: rol, responder: responder);
+      final avisos = AvisosPush.instancia = AvisosPush(api: api, canal: CanalFalso());
+      addTearDown(() => AvisosPush.instancia = null);
+      api.changes.value++;
+      await tester.pumpAndSettle();
+      return (api, llamadas, avisos);
+    }
+
+    testWidgets('sin pedirlos, Cuenta ofrece recibirlos', (tester) async {
+      final (_, llamadas, _) = await montarConAvisos(tester, 'contributor');
+      expect(find.text('Recibir avisos en este móvil'), findsOneWidget);
+      await _pulsar(tester, 'Recibir avisos en este móvil');
+      expect(llamadas, contains('PUT /api/v1/push/devices'));
+      expect(find.text('Cuando se publique o se rechace lo que dejo'), findsOneWidget);
+    });
+
+    testWidgets('con avisos se eligen cuáles y se quitan los sitios vigilados', (tester) async {
+      final (_, llamadas, avisos) = await montarConAvisos(tester, 'contributor');
+      await avisos.activar(elegir: (_) async => null);
+      await tester.pumpAndSettle();
+      expect(find.text('Cuando se publique o se rechace lo que dejo'), findsOneWidget);
+      expect(find.text('Cuando haya historias por revisar'), findsNothing);
+      expect(find.text('Plaza Mayor'), findsOneWidget);
+      expect(find.text('2 km a la redonda'), findsOneWidget);
+
+      await _pulsar(tester, 'Cuando se publique o se rechace lo que dejo');
+      expect(llamadas, contains('PATCH /api/v1/push/prefs'));
+
+      await tester.tap(find.bySemanticsLabel('Dejar de vigilar Plaza Mayor'));
+      await tester.pumpAndSettle();
+      expect(llamadas, contains('DELETE /api/v1/push/places/s1'));
+      expect(find.text('Plaza Mayor'), findsNothing);
+      expect(find.text('Ya no te avisaremos de Plaza Mayor.'), findsOneWidget);
+    });
+
+    testWidgets('quien modera elige también si le avisan de lo que hay por revisar', (tester) async {
+      final (_, _, avisos) = await montarConAvisos(tester, 'curator');
+      await avisos.activar(elegir: (_) async => null);
+      await tester.pumpAndSettle();
+      expect(find.text('Cuando haya historias por revisar'), findsOneWidget);
+    });
+
+    testWidgets('dejar de recibirlos pide confirmación', (tester) async {
+      final (_, llamadas, avisos) = await montarConAvisos(tester, 'contributor');
+      await avisos.activar(elegir: (_) async => null);
+      await tester.pumpAndSettle();
+      await _pulsar(tester, 'Dejar de recibir avisos');
+      expect(find.text('¿Dejar de recibir avisos?'), findsOneWidget);
+      await _pulsar(tester, 'Sí, dejar de recibirlos');
+      expect(llamadas, contains('DELETE /api/v1/push/devices'));
+      expect(find.text('Recibir avisos en este móvil'), findsOneWidget);
+    });
+
+    test('el radio se lee en metros o kilómetros', () {
+      expect(radioLegible(2000), '2 km');
+      expect(radioLegible(1500), '1,5 km');
+      expect(radioLegible(500), '500 m');
     });
   });
 }

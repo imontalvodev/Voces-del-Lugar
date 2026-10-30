@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voces/api.dart';
+import 'package:voces/avisos_push.dart';
 import 'package:voces/pages/account_page.dart';
 import 'package:voces/pages/bienvenida_page.dart';
 import 'package:voces/pages/contar_page.dart';
@@ -18,6 +19,10 @@ import 'package:voces/pages/story_page.dart';
 import 'package:voces/theme/letra.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
+import 'package:voces/ui/ajustes_avisos.dart';
+import 'package:voces/ui/pedir_avisos.dart';
+
+import 'apoyo/canal_falso.dart';
 
 Map<String, dynamic> _historia(String id, String status) => {
   'id': id,
@@ -41,6 +46,15 @@ VocesApi _api({String? rol}) {
   final api = VocesApi(
     client: MockClient((request) async {
       final ruta = request.url.path;
+      if (ruta.endsWith('/push/prefs')) return http.Response(jsonEncode({'notify_own': true, 'notify_review': true}), 200);
+      if (ruta.endsWith('/push/places')) {
+        return http.Response(
+          jsonEncode([
+            {'id': 's1', 'name': 'Plaza Mayor', 'latitude': 41.8, 'longitude': -2.4, 'radius_m': 2000},
+          ]),
+          200,
+        );
+      }
       if (ruta.endsWith('/stories') || ruta.contains('/me/') || ruta.contains('/moderation')) {
         return http.Response(jsonEncode([_historia('a', 'published'), _historia('b', 'pending_review')]), 200);
       }
@@ -87,6 +101,19 @@ final _pantallas = <String, Widget Function()>{
     onSeccion: (_) {},
     paginas: {for (final s in Seccion.values) s: Center(child: Text('Página ${s.name}'))},
   ),
+  'Avisos sin pedir': () {
+    final api = _api(rol: 'contributor');
+    return SingleChildScrollView(child: AjustesAvisos(api: api, avisos: AvisosPush(api: api, canal: CanalFalso())));
+  },
+  'Avisos': () {
+    final api = _api(rol: 'curator');
+    final avisos = AvisosPush(api: api, canal: CanalFalso())..activos.value = true;
+    return SingleChildScrollView(child: AjustesAvisos(api: api, avisos: avisos));
+  },
+  '¿Te avisamos?': () {
+    final api = _api(rol: 'contributor');
+    return PreguntaAvisos(avisos: AvisosPush(api: api, canal: CanalFalso()));
+  },
   'Contar': () {
     final api = _api(rol: 'contributor');
     return ContarPage(api: api, conTeselas: false, onSalir: () {}, onVerLoHecho: () {});
