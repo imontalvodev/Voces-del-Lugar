@@ -72,6 +72,7 @@ class _PlacaPulsableState extends State<PlacaPulsable> {
     final sombra = widget.sombra;
     final forma = BorderRadius.circular(widget.radio);
     return Semantics(
+      container: true,
       button: true,
       enabled: _activo,
       selected: widget.seleccionado,
