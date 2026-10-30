@@ -19,6 +19,12 @@ const _tabla = <String, (int, int)>{
   'carmin': (0xFFA3203A, 0xFFF08A9A),
   'verde': (0xFF2F6B4F, 0xFF7CC4A0),
   'sombraBoton': (0xFF18246E, 0xFF05070B),
+  // Del CSS del diseño (.vdl): texto sobre color, sombra de ficha y velo.
+  'sobreAnil': (0xFFFFFFFF, 0xFF11141C),
+  'sobreOcre': (0xFF1B1F2A, 0xFF11141C),
+  'sobreCarmin': (0xFFFFFFFF, 0xFF11141C),
+  'sombra': (0xFFC9CDD6, 0xFF0A0C11),
+  'scrim': (0x9E1B1F2A, 0xB3000000),
 };
 
 Map<String, Color> _tokens(VdlColors c) => {
@@ -36,6 +42,11 @@ Map<String, Color> _tokens(VdlColors c) => {
       'carmin': c.carmin,
       'verde': c.verde,
       'sombraBoton': c.sombraBoton,
+      'sobreAnil': c.sobreAnil,
+      'sobreOcre': c.sobreOcre,
+      'sobreCarmin': c.sobreCarmin,
+      'sombra': c.sombra,
+      'scrim': c.scrim,
     };
 
 void main() {
@@ -90,6 +101,22 @@ void main() {
       expect(text.bodyMedium!.color, c.tinta);
     });
   }
+
+  testWidgets('las piezas leen los colores del tema con VdlColors.of', (tester) async {
+    late VdlColors leidos;
+    await tester.pumpWidget(
+      Theme(
+        data: vdlTheme(VdlColors.oscuro, Brightness.dark),
+        child: Builder(
+          builder: (context) {
+            leidos = VdlColors.of(context);
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    expect(leidos, VdlColors.oscuro);
+  });
 
   test('la sombra de placa es sólida', () {
     final sombra = sombraPlaca(VdlColors.claro, 3);
