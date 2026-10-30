@@ -639,7 +639,8 @@ Future<bool> confirmarPublicar(BuildContext context, StoryPin story) {
   return confirmar(
     context,
     titulo: '¿Publicar en el mapa?',
-    mensaje: 'Cualquiera podrá ver y escuchar «${story.title}» en ${story.placeName}.',
+    mensaje:
+        'Cualquiera podrá ver y escuchar «${story.title}» en ${story.placeName}. Podrás retirarla más adelante si hace falta.',
     si: 'Sí, publicar en el mapa',
   );
 }
@@ -649,7 +650,7 @@ Future<bool> confirmReject(BuildContext context, StoryPin story) {
   return confirmar(
     context,
     titulo: '¿Rechazar esta historia?',
-    mensaje: '«${story.title}» no llegará al mapa. Quien la dejó la verá como rechazada en su cuenta.',
+    mensaje: 'No llegará al mapa. Quien la subió lo verá en su cuenta.',
     si: 'Sí, rechazar',
     peligro: true,
   );
