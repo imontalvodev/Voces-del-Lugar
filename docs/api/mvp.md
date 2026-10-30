@@ -22,3 +22,11 @@ Base: `/api/v1`. Esquema interactivo: `/docs` cuando la API está en marcha.
 | GET | `/media/{id}` | igual que el detalle de la historia | El archivo. |
 
 Licencias aceptadas en el cuerpo: `CC-BY-SA-4.0` (por defecto), `CC-BY-4.0`, `CC0-1.0`.
+
+## Historia en las respuestas
+
+Todas las rutas que devuelven historias (`map`, `nearby`, `mine`, `review`, el detalle y las acciones de moderación) usan la misma forma. Campos que conviene conocer:
+
+| Campo | Qué es |
+|---|---|
+| `number` | Número de ficha, correlativo y único. La app lo pinta como «Nº 0142». Las historias anteriores a este campo se numeraron por fecha de creación. |

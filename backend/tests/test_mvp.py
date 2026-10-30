@@ -247,3 +247,54 @@ def test_el_mismo_sitio_no_crea_otro_lugar(client: TestClient):
     other["place"]["name"] = "El lavadero"
     third = client.post("/api/v1/stories", json=other, headers=headers)
     assert third.json()["place"]["id"] != first.json()["place"]["id"]
+
+
+def test_cada_historia_nueva_recibe_el_siguiente_numero(client: TestClient):
+    token = _register(client, "ana@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+    first = client.post("/api/v1/stories", json=_story("La fuente"), headers=headers).json()
+    second = client.post("/api/v1/stories", json=_story("El cántaro"), headers=headers).json()
+    assert second["number"] == first["number"] + 1
+
+    client.post(f"/api/v1/stories/{first['id']}/publish", headers=headers)
+    detail = client.get(f"/api/v1/stories/{first['id']}").json()
+    mine = client.get("/api/v1/stories/mine", headers=headers).json()
+    review = client.get("/api/v1/stories/review", headers=headers).json()
+    on_map = client.get("/api/v1/stories/map", params={"west": -4, "south": 40, "east": -3, "north": 41}).json()
+    assert detail["number"] == first["number"]
+    assert {item["title"]: item["number"] for item in mine} == {
+        "La fuente": first["number"],
+        "El cántaro": second["number"],
+    }
+    assert [item["number"] for item in review] == [second["number"]]
+    assert [item["number"] for item in on_map] == [first["number"]]
+
+
+def test_la_migracion_numera_las_historias_por_antiguedad(client: TestClient):
+    token = _register(client, "ana@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+    ids = [
+        client.post("/api/v1/stories", json=_story(title), headers=headers).json()["id"]
+        for title in ("Tercera", "Primera", "Segunda")
+    ]
+    config = Config(str(ROOT / "alembic.ini"))
+    command.downgrade(config, "001")
+    engine = create_engine(os.environ["DATABASE_URL"])
+    try:
+        with engine.begin() as conn:
+            for days, story_id in zip((1, 3, 2), ids):
+                conn.execute(
+                    text("UPDATE stories SET created_at = now() - make_interval(days => :days) WHERE id = :id"),
+                    {"days": days, "id": story_id},
+                )
+    finally:
+        engine.dispose()
+        command.upgrade(config, "head")
+
+    numbers = {
+        item["title"]: item["number"]
+        for item in client.get("/api/v1/stories/mine", headers=headers).json()
+    }
+    assert numbers == {"Primera": 1, "Segunda": 2, "Tercera": 3}
+    nueva = client.post("/api/v1/stories", json=_story("Cuarta"), headers=headers).json()
+    assert nueva["number"] == 4

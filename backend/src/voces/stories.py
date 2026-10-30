@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from voces.schemas import CATEGORIES, LICENSES, StoryIn, StoryOut, StoryPatch
 
 STORY_COLUMNS = """
-    s.id, s.title, s.body, s.transcript, s.narrator_name, s.narrator_relation,
+    s.id, s.number, s.title, s.body, s.transcript, s.narrator_name, s.narrator_relation,
     s.narrator_consent, s.narrator_deceased, s.consent_recorded_at,
     s.category, s.decade_approx, s.original_language, s.license, s.status,
     s.created_at, s.published_at, s.author_id,
@@ -238,6 +238,7 @@ def media_for(session: Session, story_ids: list[UUID]) -> dict[UUID, list[dict]]
 def to_story(row: dict, media: list[dict]) -> StoryOut:
     return StoryOut(
         id=row["id"],
+        number=row["number"],
         title=row["title"],
         body=row["body"],
         transcript=row["transcript"],

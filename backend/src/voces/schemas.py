@@ -79,6 +79,7 @@ class MediaOut(BaseModel):
 
 class StoryOut(BaseModel):
     id: UUID
+    number: int
     title: str
     body: str | None
     transcript: str | None
