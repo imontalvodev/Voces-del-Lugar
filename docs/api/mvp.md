@@ -20,6 +20,12 @@ Base: `/api/v1`. Esquema interactivo: `/docs` cuando la API está en marcha.
 | POST | `/stories/{id}/reject` | `curator` o `admin` | Marca `rejected`. |
 | POST | `/stories/{id}/unpublish` | `curator` o `admin` | Vuelve a `pending_review` con motivo `unpublished` y desaparece del mapa. |
 | GET | `/media/{id}` | igual que el detalle de la historia | El archivo. |
+| GET | `/push/config` | cualquiera | `vapid_public_key` para registrar UnifiedPush, o `null`. |
+| PUT | `/push/devices` | cuenta | Guarda este dispositivo: `platform` `webpush` (UnifiedPush: `endpoint` https público, `p256dh`, `auth`) o `apns` (`endpoint` = token). Si ya era de otra cuenta, pasa a esta. `204`. |
+| DELETE | `/push/devices?endpoint=` | cuenta | Lo quita, por ejemplo al cerrar sesión. `204`. |
+| GET, PATCH | `/push/prefs` | cuenta | `notify_own` (lo mío se publica o se rechaza) y `notify_review` (hay algo por revisar; solo llega a `curator` y `admin`). Los dos empiezan en `true`. |
+| GET, POST | `/push/places` | cuenta | Sitios vigilados: `name`, `latitude`, `longitude`, `radius_m` (200 a 20000, 2000 por defecto). Hasta 20. |
+| DELETE | `/push/places/{id}` | cuenta | Deja de vigilar ese sitio. `204`. |
 
 Licencias aceptadas en el cuerpo: `CC-BY-SA-4.0` (por defecto), `CC-BY-4.0`, `CC0-1.0`.
 
@@ -42,3 +48,16 @@ No hay moderadores a tiempo completo. Al guardar o corregir, el título, el text
 - **Lo demás** se publica al momento. Si solo lleva audio, se publica cuando llega el audio; el audio no se puede leer y pasa tal cual.
 
 `AUTO_PUBLISH=false` vuelve a la revisión a mano de todo: el filtro de basura sigue y nada se publica solo.
+
+## Avisos push
+
+Sin Google: Android recibe por UnifiedPush (la app necesita un distribuidor, como ntfy) y iOS por APNs. Cada aviso lleva `kind`, `story_id`, `title` y `body`; por UnifiedPush va como JSON cifrado (RFC 8291) y firmado con VAPID si hay `VAPID_PRIVATE_KEY`.
+
+| `kind` | A quién | Cuándo |
+|---|---|---|
+| `published` | autor con `notify_own` | Un moderador publica su historia. Si se publica sola no hace falta: lo ve al guardar. |
+| `rejected` | autor con `notify_own` | Un moderador la rechaza. |
+| `review` | `curator` y `admin` con `notify_review`, menos el autor | Una historia queda en revisión lista para mirar. |
+| `nearby` | quien vigila un sitio a menos de `radius_m`, menos el autor | Se publica una historia, a mano o sola. |
+
+Los avisos salen después de responder. Si el servicio responde `404` o `410` (o APNs dice `BadDeviceToken`), el dispositivo se borra.

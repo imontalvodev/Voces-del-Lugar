@@ -2,14 +2,17 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from voces import moderation, notify
 from voces.config import Settings, get_settings
 from voces.db import get_session
 from voces.deps import load_user, optional_user_id, require_user
+from voces.push import Sender
+from voces.routers.push import get_sender
 from voces.stories import can_read, fetch_story, media_for, settle_after_audio, to_story
 
 router = APIRouter(tags=["media"])
@@ -33,6 +36,8 @@ def upload_audio(
     user: Annotated[dict, Depends(require_user)],
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    sender: Annotated[Sender, Depends(get_sender)],
+    background: BackgroundTasks,
 ):
     row = fetch_story(session, story_id)
     if row is None:
@@ -69,7 +74,13 @@ def upload_audio(
     )
     session.commit()
     settle_after_audio(session, story_id, settings)
-    return to_story(fetch_story(session, story_id), media_for(session, [story_id]).get(story_id, []))
+    after = fetch_story(session, story_id)
+    if row["review_reason"] == moderation.AWAITING_MEDIA:
+        if after["status"] == "published":
+            background.add_task(notify.published, sender, story_id, by_moderator=False)
+        else:
+            background.add_task(notify.needs_review, sender, story_id)
+    return to_story(after, media_for(session, [story_id]).get(story_id, []))
 
 
 @router.get("/media/{media_id}")

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from voces.config import get_settings
-from voces.routers import auth, geocode, media, stories
+from voces.routers import auth, geocode, media, push, stories
 
 app = FastAPI(title="Voces del Lugar", version="0.1.0")
 settings = get_settings()
@@ -16,6 +16,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(stories.router, prefix="/api/v1")
 app.include_router(geocode.router, prefix="/api/v1")
 app.include_router(media.router, prefix="/api/v1")
+app.include_router(push.router, prefix="/api/v1")
 
 
 @app.get("/health")

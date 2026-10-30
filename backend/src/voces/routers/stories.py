@@ -1,14 +1,17 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from voces import moderation, notify
 from voces.config import Settings, get_settings
 from voces.db import get_session
 from voces.deps import optional_user_id, require_user
 from voces.deps import load_user
+from voces.push import Sender
+from voces.routers.push import get_sender
 from voces.schemas import StoryIn, StoryOut, StoryPatch
 from voces.stories import (
     assert_publishable,
@@ -93,9 +96,15 @@ def create(
     user: Annotated[dict, Depends(require_user)],
     session: Annotated[Session, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_settings)],
+    sender: Annotated[Sender, Depends(get_sender)],
+    background: BackgroundTasks,
 ) -> StoryOut:
     story_id = create_story(session, user["id"], payload, settings)
     row = fetch_story(session, story_id)
+    if row["status"] == "published":
+        background.add_task(notify.published, sender, story_id, by_moderator=False)
+    elif row["review_reason"] != moderation.AWAITING_MEDIA:
+        background.add_task(notify.needs_review, sender, story_id)
     return to_story(row, [])
 
 
@@ -115,6 +124,8 @@ def publish(
     story_id: UUID,
     user: Annotated[dict, Depends(require_user)],
     session: Annotated[Session, Depends(get_session)],
+    sender: Annotated[Sender, Depends(get_sender)],
+    background: BackgroundTasks,
 ) -> StoryOut:
     _require_moderator(user)
     row = _require_story(session, story_id)
@@ -130,6 +141,7 @@ def publish(
         {"id": story_id},
     )
     session.commit()
+    background.add_task(notify.published, sender, story_id, by_moderator=True)
     return to_story(fetch_story(session, story_id), media_for(session, [story_id]).get(story_id, []))
 
 
@@ -138,6 +150,8 @@ def reject(
     story_id: UUID,
     user: Annotated[dict, Depends(require_user)],
     session: Annotated[Session, Depends(get_session)],
+    sender: Annotated[Sender, Depends(get_sender)],
+    background: BackgroundTasks,
 ) -> StoryOut:
     _require_moderator(user)
     row = _require_story(session, story_id)
@@ -148,6 +162,7 @@ def reject(
         {"id": story_id},
     )
     session.commit()
+    background.add_task(notify.rejected, sender, story_id)
     return to_story(fetch_story(session, story_id), media_for(session, [story_id]).get(story_id, []))
 
 

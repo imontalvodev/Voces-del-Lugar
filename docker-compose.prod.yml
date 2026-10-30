@@ -21,6 +21,10 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       CORS_ORIGINS: https://${VOCES_DOMAIN}
       MEDIA_ROOT: /data/media
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      APNS_KEY_PATH: ${APNS_KEY_PATH:-}
+      APNS_KEY_ID: ${APNS_KEY_ID:-}
+      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
     volumes:
       - voces_media:/data/media
     depends_on:

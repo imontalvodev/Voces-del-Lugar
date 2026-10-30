@@ -18,6 +18,14 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
     # Lo que pasa el filtro se publica sin esperar a nadie.
     auto_publish: bool = True
+    # Avisos push. Sin VAPID, los Web Push van sin firmar; sin APNs, iOS no recibe.
+    vapid_private_key: str | None = None
+    vapid_subject: str = "mailto:hola@vocesdellugar.org"
+    apns_key_path: str | None = None
+    apns_key_id: str | None = None
+    apns_team_id: str | None = None
+    apns_topic: str = "dev.vocesdellugar.voces"
+    apns_sandbox: bool = False
 
     def check_production(self) -> None:
         if self.voces_env != "production":

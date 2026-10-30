@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from contextlib import contextmanager
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -24,6 +25,12 @@ def get_session() -> Generator[Session, None, None]:
         yield session
     finally:
         session.close()
+
+
+@contextmanager
+def session_scope() -> Generator[Session, None, None]:
+    """Sesión propia para lo que corre después de responder."""
+    yield from get_session()
 
 
 def reset_engine() -> None:
