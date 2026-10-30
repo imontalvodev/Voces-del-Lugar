@@ -145,4 +145,11 @@ void main() {
     await montar(tester, SizedBox(width: 300, child: _ficha(sello: EstadoSello.enRevision)), escala: 1.4);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('con la letra muy grande la pestaña no tapa el título', (tester) async {
+    await montar(tester, SizedBox(width: 380, child: _ficha()), escala: 1.82);
+    final pestana = tester.getRect(find.byKey(const Key('ficha-pestana')));
+    final titulo = tester.getRect(find.text('La noche que se heló la fuente'));
+    expect(pestana.bottom, lessThanOrEqualTo(titulo.top));
+  });
 }

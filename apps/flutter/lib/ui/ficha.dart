@@ -5,6 +5,7 @@ import 'package:voces/story_format.dart';
 import 'package:voces/story_format.dart' as formato show contadaPor;
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
+import 'package:voces/ui/pagina.dart';
 import 'package:voces/ui/placa.dart';
 import 'package:voces/ui/sello.dart';
 
@@ -150,7 +151,9 @@ class FichaHistoria extends StatelessWidget {
           clipBehavior: Clip.none,
           children: [
             Padding(
-              padding: compacta ? const EdgeInsets.fromLTRB(16, 16, 16, 14) : const EdgeInsets.fromLTRB(18, 20, 18, 16),
+              padding: compacta
+                  ? EdgeInsets.fromLTRB(16, numero == null ? 16 : arribaConPestana(context, 16), 16, 14)
+                  : EdgeInsets.fromLTRB(18, numero == null ? 20 : arribaConPestana(context, 20), 18, 16),
               child: ExcludeSemantics(child: contenido),
             ),
             if (numero != null)

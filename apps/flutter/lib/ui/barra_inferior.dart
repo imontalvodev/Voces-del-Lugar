@@ -91,6 +91,7 @@ class _Seccion extends StatelessWidget {
                     destino.etiqueta,
                     maxLines: 1,
                     softWrap: false,
+                    textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 1.3),
                     overflow: TextOverflow.visible,
                     style: Theme.of(context).textTheme.bodySmall!.copyWith(
                       fontSize: 15,

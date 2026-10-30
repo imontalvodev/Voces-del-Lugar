@@ -68,7 +68,7 @@ class Armazon extends StatelessWidget {
     );
     return switch (tamano(context)) {
       Vdl.compacto => Scaffold(
-        body: cuerpo,
+        body: SafeArea(bottom: false, child: cuerpo),
         bottomNavigationBar: seccion == Seccion.contar
             ? null
             : BarraInferior(
@@ -81,16 +81,19 @@ class Armazon extends StatelessWidget {
           children: [
             _Rail(seccion: seccion, secciones: orden, onSeccion: onSeccion),
             Container(width: 2, color: c.tinta),
-            Expanded(child: cuerpo),
+            Expanded(child: SafeArea(left: false, bottom: false, child: cuerpo)),
           ],
         ),
       ),
       Vdl.amplio => Scaffold(
-        body: Column(
-          children: [
-            _BarraSuperior(seccion: seccion, moderador: moderador, onSeccion: onSeccion),
-            Expanded(child: cuerpo),
-          ],
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _BarraSuperior(seccion: seccion, moderador: moderador, onSeccion: onSeccion),
+              Expanded(child: SafeArea(top: false, bottom: false, child: cuerpo)),
+            ],
+          ),
         ),
       ),
     };

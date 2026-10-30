@@ -234,7 +234,9 @@ class _Ficha extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: amplio ? const EdgeInsets.fromLTRB(32, 32, 32, 28) : const EdgeInsets.fromLTRB(18, 24, 18, 20),
+            padding: amplio
+                ? EdgeInsets.fromLTRB(32, arribaConPestana(context, 32), 32, 28)
+                : EdgeInsets.fromLTRB(18, arribaConPestana(context, 24), 18, 20),
             decoration: BoxDecoration(
               color: c.azulejo,
               border: Border.all(color: c.tinta, width: 1.5),
@@ -584,7 +586,7 @@ class HistoriaNoEsta extends StatelessWidget {
                       width: double.infinity,
                       margin: const EdgeInsets.all(1.5),
                       color: c.azulejo,
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 36),
+                      padding: EdgeInsets.fromLTRB(22, arribaConPestana(context, 36), 22, 36),
                       child: Column(
                         children: [
                           Icon(LucideIcons.searchX, size: 44, color: c.piedra),

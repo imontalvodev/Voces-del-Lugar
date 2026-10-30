@@ -239,7 +239,14 @@ class TarjetaConPestana extends StatelessWidget {
         children: [
           Container(
             width: double.infinity,
-            padding: padding ?? EdgeInsets.all(amplio ? 32 : 20),
+            padding: (padding ?? EdgeInsets.all(amplio ? 32 : 20))
+                .resolve(TextDirection.ltr)
+                .copyWith(
+                  top: arribaConPestana(
+                    context,
+                    (padding ?? EdgeInsets.all(amplio ? 32 : 20)).resolve(TextDirection.ltr).top,
+                  ),
+                ),
             decoration: BoxDecoration(
               color: c.azulejo,
               border: Border.fromBorderSide(filete),
@@ -275,4 +282,11 @@ class TarjetaConPestana extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Margen de arriba de una tarjeta con pestaña: la pestaña crece con la
+/// letra y baja por dentro del borde, así que el contenido baja con ella.
+double arribaConPestana(BuildContext context, double base) {
+  final altoPestana = MediaQuery.textScalerOf(context).scale(15) * 1.6 + 3;
+  return altoPestana - 15 + 8 > base ? altoPestana - 15 + 8 : base;
 }
