@@ -11,7 +11,6 @@ import 'package:voces/ui/tokens.dart';
 
 void main() {
   usePathUrlStrategy(); // /historia/<id> en vez de /#/historia/<id>
-  useBundledFonts();
   runApp(const VocesApp());
 }
 

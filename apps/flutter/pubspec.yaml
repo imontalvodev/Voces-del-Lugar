@@ -40,7 +40,6 @@ dependencies:
   latlong2: ^0.10.1
   http: ^1.6.0
   file_picker: ^13.1.0
-  google_fonts: ^8.2.1
   shared_preferences: ^2.5.5
   flutter_animate: ^4.5.2
   just_audio: ^0.10.6
@@ -69,9 +68,22 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
 
-  # Fuentes empaquetadas: sin pedirlas a Google al arrancar.
-  assets:
-    - google_fonts/
+  # Letras empaquetadas: la app no pide nada por red para pintar texto.
+  fonts:
+    - family: AtkinsonHyperlegibleNext
+      fonts:
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/AtkinsonHyperlegibleNext-ExtraBold.ttf
+          weight: 800
+    - family: CourierPrime
+      fonts:
+        - asset: assets/fonts/CourierPrime-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/CourierPrime-Bold.ttf
+          weight: 700
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
