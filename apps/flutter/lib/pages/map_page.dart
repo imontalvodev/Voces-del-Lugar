@@ -14,6 +14,7 @@ import 'package:voces/story_format.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
 import 'package:voces/ui/avisos.dart';
+import 'package:voces/ui/buscador.dart';
 import 'package:voces/ui/estados.dart';
 import 'package:voces/ui/ficha.dart';
 import 'package:voces/ui/pagina.dart';
@@ -51,14 +52,12 @@ class MapPage extends StatefulWidget {
 
 class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   final _map = MapController();
-  final _query = TextEditingController();
   late final AnimationController _flight = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
   );
   VoidCallback? _flightStep;
   Timer? _debounce;
-  Timer? _placeDebounce;
   List<StoryPin> _stories = [];
   String? _lugarId;
   LatLng? _pin;
@@ -69,9 +68,6 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   bool _sinUbicacion = false;
   bool _localizando = false;
   bool _colocando = false;
-  List<PlaceHit> _places = [];
-  bool _buscandoLugares = false;
-  int _placeQuery = 0;
   int _reloadTicket = 0;
   ({LatLng centro, double zoom})? _inicio;
 
@@ -89,10 +85,8 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   @override
   void dispose() {
     widget.api.changes.removeListener(reload);
-    _placeDebounce?.cancel();
     _debounce?.cancel();
     _flight.dispose();
-    _query.dispose();
     super.dispose();
   }
 
@@ -187,41 +181,8 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     });
   }
 
-  /// Busca pueblos, barrios y calles mientras se escribe.
-  void _searchPlaces(String value) {
-    _placeDebounce?.cancel();
-    final query = value.trim();
-    final ticket = ++_placeQuery;
-    if (query.length < 3) {
-      setState(() {
-        _places = [];
-        _buscandoLugares = false;
-      });
-      return;
-    }
-    setState(() => _buscandoLugares = true);
-    _placeDebounce = Timer(const Duration(milliseconds: 450), () async {
-      List<PlaceHit> hits;
-      try {
-        hits = await widget.api.searchPlaces(query);
-      } catch (_) {
-        hits = [];
-      }
-      if (!mounted || ticket != _placeQuery) return;
-      setState(() {
-        _places = hits;
-        _buscandoLugares = false;
-      });
-    });
-  }
-
   void _goToPlace(PlaceHit hit) {
-    _placeQuery++;
-    _query.text = hit.name;
-    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
-      _places = [];
-      _buscandoLugares = false;
       _lugarId = null;
       _lista = false;
       _sinUbicacion = false;
@@ -706,15 +667,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     ];
   }
 
-  Widget _buscador() {
-    return _Buscador(
-      controller: _query,
-      lugares: _places,
-      buscando: _buscandoLugares,
-      onCambio: _searchPlaces,
-      onLugar: _goToPlace,
-    );
-  }
+  Widget _buscador() => BuscadorLugares(api: widget.api, onLugar: _goToPlace);
 
   Widget _lienzo() {
     final inicio = _inicio!;
@@ -1056,135 +1009,6 @@ class _Cartel extends StatelessWidget {
           style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
         ),
       ),
-    );
-  }
-}
-
-/// Buscador de pueblos, barrios y calles, con la lista de lugares debajo.
-class _Buscador extends StatelessWidget {
-  const _Buscador({
-    required this.controller,
-    required this.lugares,
-    required this.buscando,
-    required this.onCambio,
-    required this.onLugar,
-  });
-
-  final TextEditingController controller;
-  final List<PlaceHit> lugares;
-  final bool buscando;
-  final ValueChanged<String> onCambio;
-  final ValueChanged<PlaceHit> onLugar;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = VdlColors.of(context);
-    final letra = Theme.of(context).textTheme;
-    final campo = Container(
-      constraints: const BoxConstraints(minHeight: 54),
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: c.azulejo,
-        border: Border.all(color: c.tinta, width: 2),
-        borderRadius: BorderRadius.circular(2),
-      ),
-      child: Row(
-        children: [
-          Icon(LucideIcons.search, size: 22, color: c.tinta),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Semantics(
-              label: 'Buscar un pueblo, barrio o calle',
-              textField: true,
-              child: TextField(
-                controller: controller,
-                onChanged: onCambio,
-                onSubmitted: (_) {
-                  if (lugares.isNotEmpty) onLugar(lugares.first);
-                },
-                textInputAction: TextInputAction.search,
-                cursorColor: c.anilHondo,
-                style: letra.bodyMedium,
-                decoration: InputDecoration(
-                  isDense: true,
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  hintText: 'Busca un pueblo, barrio o calle',
-                  hintStyle: letra.bodyMedium!.copyWith(color: c.piedra),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (!buscando && lugares.isEmpty) return campo;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        campo,
-        const SizedBox(height: 4),
-        Container(
-          decoration: BoxDecoration(
-            color: c.azulejo,
-            border: Border.all(color: c.tinta, width: 2),
-            borderRadius: BorderRadius.circular(2),
-            boxShadow: [BoxShadow(color: c.sombra, offset: const Offset(3, 3))],
-          ),
-          child: Semantics(
-            container: true,
-            label: 'Lugares encontrados',
-            child: buscando
-                ? Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Text(
-                      'Buscando lugares…',
-                      style: letra.bodyMedium!.copyWith(fontWeight: FontWeight.w700, color: c.piedra),
-                    ),
-                  )
-                : Column(
-                    children: [
-                      for (final (i, hit) in lugares.indexed)
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: i == 0 ? c.anilVelo : null,
-                            border: i == 0 ? null : Border(top: BorderSide(color: c.filete, width: 1.5)),
-                          ),
-                          child: PlacaPulsable(
-                            onPressed: () => onLugar(hit),
-                            hunde: false,
-                            radio: 0,
-                            minimo: const Size(48, 60),
-                            alineacion: Alignment.centerLeft,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  hit.name,
-                                  style: letra.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
-                                ),
-                                if (hit.context.isNotEmpty || hit.kindLabel.isNotEmpty)
-                                  Text(
-                                    [
-                                      if (hit.kindLabel.isNotEmpty) hit.kindLabel,
-                                      if (hit.context.isNotEmpty) hit.context,
-                                    ].join(' · '),
-                                    style: letra.bodySmall!.copyWith(color: c.piedra),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-          ),
-        ),
-      ],
     );
   }
 }
