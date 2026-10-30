@@ -72,7 +72,7 @@ La app web se construye con `--dart-define=API_BASE=https://voces.example`.
 Avisos push (opcional). Android, por UnifiedPush, solo necesita la clave VAPID:
 
 ```bash
-cd backend && ../.venv/bin/python -m voces.push claves   # copia VAPID_PRIVATE_KEY al entorno
+cd backend && PYTHONPATH=src ../.venv/bin/python -m voces.push claves   # copia VAPID_PRIVATE_KEY al entorno
 ```
 
 iOS necesita una clave APNs (`.p8`) de la cuenta de Apple: `APNS_KEY_ID`, `APNS_TEAM_ID` y `APNS_KEY_PATH`, con el fichero montado en el contenedor de la API. Sin ella, iOS no recibe avisos y lo demás sigue igual.

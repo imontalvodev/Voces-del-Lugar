@@ -5,7 +5,7 @@ otro) y sus claves, y aquí se manda un Web Push cifrado (RFC 8291) y firmado
 con VAPID (RFC 8292). iOS recibe por APNs con la clave .p8 de la cuenta de
 Apple. Sin claves configuradas, esa vía no manda nada.
 
-`python -m voces.push claves` crea un par VAPID para `VAPID_PRIVATE_KEY`.
+`PYTHONPATH=src python -m voces.push claves` crea un par VAPID para `VAPID_PRIVATE_KEY`.
 """
 
 import base64
