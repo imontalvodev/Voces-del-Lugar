@@ -136,9 +136,11 @@ class Sello extends StatelessWidget {
           children: [
             Icon(estado.icono, size: grande ? 18 : 16, color: color),
             const SizedBox(width: 6),
-            Text(
-              estado.nombre.toUpperCase(),
-              style: registro.copyWith(fontSize: grande ? 16 : 15, height: 1.15, letterSpacing: 0.3, color: color),
+            Flexible(
+              child: Text(
+                estado.nombre.toUpperCase(),
+                style: registro.copyWith(fontSize: grande ? 16 : 15, height: 1.15, letterSpacing: 0.3, color: color),
+              ),
             ),
           ],
         ),

@@ -67,3 +67,25 @@ String? decadeLabel(int? year) {
   if (decade >= 1920 && decade <= 1990) return 'Años ${decade % 100}';
   return 'Década de $decade';
 }
+
+/// «Nº 0142»: el número de ficha con al menos cuatro cifras.
+String numeroFicha(int numero) => 'Nº ${numero.toString().padLeft(4, '0')}';
+
+/// Quién la cuenta, como lo escribe la ficha: «Carmen Ruiz, abuela»,
+/// «Un vecino (sin nombre)» o «una persona anónima», más «(fallecido)».
+String contadaPor(String? name, String? relation, {required bool deceased}) {
+  final nombre = name?.trim() ?? '';
+  final parentesco = relation?.trim() ?? '';
+  final base = nombre.isNotEmpty
+      ? (parentesco.isEmpty ? nombre : '$nombre, $parentesco')
+      : parentesco.isNotEmpty
+      ? '${parentesco[0].toUpperCase()}${parentesco.substring(1)} (sin nombre)'
+      : 'una persona anónima';
+  return deceased ? '$base (fallecido)' : base;
+}
+
+/// Duración de un audio como «4:12».
+String? duracionCorta(int? segundos) {
+  if (segundos == null) return null;
+  return '${segundos ~/ 60}:${(segundos % 60).toString().padLeft(2, '0')}';
+}

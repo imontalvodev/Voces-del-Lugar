@@ -27,6 +27,7 @@ class PlacaPulsable extends StatefulWidget {
     this.etiqueta,
     this.seleccionado,
     this.alineacion = Alignment.center,
+    this.hunde = true,
   });
 
   final VoidCallback? onPressed;
@@ -46,6 +47,9 @@ class PlacaPulsable extends StatefulWidget {
   final bool? seleccionado;
   final AlignmentGeometry alineacion;
 
+  /// Las fichas son botones enteros pero no se hunden al pulsarlas.
+  final bool hunde;
+
   @override
   State<PlacaPulsable> createState() => _PlacaPulsableState();
 }
@@ -63,7 +67,7 @@ class _PlacaPulsableState extends State<PlacaPulsable> {
   @override
   Widget build(BuildContext context) {
     final c = VdlColors.of(context);
-    final hundido = _pulsado && _activo;
+    final hundido = _pulsado && _activo && widget.hunde;
     final borde = widget.borde;
     final sombra = widget.sombra;
     final forma = BorderRadius.circular(widget.radio);
