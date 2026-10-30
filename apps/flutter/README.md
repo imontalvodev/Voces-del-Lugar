@@ -20,12 +20,11 @@ Sin `--dart-define=API_BASE`, en web la API se busca en el puerto 8001 de la má
 
 ## Interfaz
 
-La estética es un crepúsculo: la hora en que se sale a la puerta a contar. Todo lo visual vive en `lib/ui/`.
+El diseño es «Placa y registro» (`docs/rediseno/` en la rama `develop`): claro por defecto y oscuro si el sistema lo está, con el tamaño de letra del sistema multiplicado por el ajuste propio (Normal, Grande o Muy grande).
 
-- `sky.dart` y `shaders/dusk.frag`: el cielo de fondo es un shader GLSL (nubes, estrellas, halo que sigue al puntero). Si el dispositivo no lo compila queda un degradado.
-- `voice_terrain.dart`: el paisaje 3D de la portada y de cada ficha. Cada fila es una onda de voz proyectada en perspectiva; cada historia levanta un cerro con una farola que se puede tocar. Cuando suena una grabación, el paisaje se agita con ella.
-- `audio.dart`: reproductor con huella de voz arrastrable y grabadora dentro de la app (`record`). En web graba WAV; en móvil, AAC.
-- `dusk_tiles.dart`: teselas de OpenStreetMap con la luminancia invertida y teñida, sin clave de proveedor.
-- `kit.dart`, `tokens.dart`: cristal, botones, chips, colores, tipografía (Instrument Serif y Bricolage Grotesque) y tiempos de animación.
+- `lib/theme/`: `vdl_colors.dart` y `vdl_theme.dart` (copiados del handoff del diseño) y `letra.dart` (ajuste de tamaño de letra guardado en el dispositivo).
+- `assets/fonts/`: Atkinson Hyperlegible Next para leer y Courier Prime para los datos de ficha, empaquetadas con sus licencias OFL. Ninguna letra se pide por red.
+- `lib/ui/` (piezas nuevas): `placa.dart` (botones que se hunden al pulsar), `campos.dart` (campo, casilla y licencia), `sello.dart` (chips de tipo y sellos de estado), `ficha.dart`, `avisos.dart` (aviso, notificación breve y diálogo), `estados.dart` (carga y vacío), `barra_inferior.dart` y `teselas.dart` (OpenStreetMap con el filtro claro u oscuro del handoff).
+- `kit.dart`, `tokens.dart`, `story_card.dart` y `audio.dart` son de la interfaz anterior y se van sustituyendo pantalla a pantalla.
 
-Librerías: `flutter_animate` (entradas y efectos), `animations` (transformación de tarjeta a ficha y pasos del alta), `lucide_icons_flutter`, `record`, `just_audio`. Todas las animaciones respetan la preferencia de reducir movimiento.
+Nada de blur, sombras difusas ni animaciones continuas: las sombras son sólidas y todo respeta la preferencia de reducir movimiento.

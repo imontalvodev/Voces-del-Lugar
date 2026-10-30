@@ -1,7 +1,6 @@
 import 'package:animations/animations.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -9,9 +8,8 @@ import 'package:voces/api.dart';
 import 'package:voces/pages/map_page.dart' show LampPin;
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/audio.dart';
-import 'package:voces/ui/dusk_tiles.dart';
 import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/sky.dart';
+import 'package:voces/ui/teselas.dart';
 import 'package:voces/ui/tokens.dart';
 
 class ComposePage extends StatefulWidget {
@@ -68,7 +66,10 @@ class _ComposePageState extends State<ComposePage> {
   bool get _hasAudio => _clip != null || _file != null;
 
   Future<void> _pickAudio() async {
-    final file = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['mp3', 'm4a', 'wav', 'ogg', 'webm', 'aac']);
+    final file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: ['mp3', 'm4a', 'wav', 'ogg', 'webm', 'aac'],
+    );
     if (file != null) {
       setState(() {
         _file = file;
@@ -86,7 +87,9 @@ class _ComposePageState extends State<ComposePage> {
         return error == null;
       case _Step.story:
         final title = _title.text.trim().isEmpty ? 'Ponle un título, aunque sea corto.' : null;
-        final story = _body.text.trim().isEmpty && !_hasAudio ? 'Graba la historia o escríbela. Con una de las dos basta.' : null;
+        final story = _body.text.trim().isEmpty && !_hasAudio
+            ? 'Graba la historia o escríbela. Con una de las dos basta.'
+            : null;
         setState(() {
           _titleError = title;
           _storyError = story;
@@ -170,7 +173,10 @@ class _ComposePageState extends State<ComposePage> {
     } on ApiException catch (error) {
       setState(() => _formError = error.message);
     } catch (_) {
-      setState(() => _formError = 'No se pudo guardar: no hay conexión con el archivo. Tu historia sigue aquí, vuelve a intentarlo.');
+      setState(
+        () => _formError =
+            'No se pudo guardar: no hay conexión con el archivo. Tu historia sigue aquí, vuelve a intentarlo.',
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -182,83 +188,87 @@ class _ComposePageState extends State<ComposePage> {
     final done = _step == _Step.done;
     return Scaffold(
       backgroundColor: Palette.night,
-      body: Sky(
-        child: SafeArea(
-          child: Column(
-            children: [
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Row(
+                children: [
+                  GlassIconButton(
+                    icon: done ? LucideIcons.check : LucideIcons.x,
+                    tooltip: done ? 'Terminar' : 'Salir sin guardar',
+                    onPressed: () => Navigator.pop(context, done),
+                  ),
+                  const SizedBox(width: 16),
+                  if (!done)
+                    Expanded(
+                      child: _Progress(step: _step.index, total: _asks.length, onJump: _jump),
+                    ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: PageTransitionSwitcher(
+                duration: Motion.of(context, const Duration(milliseconds: 460)),
+                reverse: !_forward,
+                transitionBuilder: (child, primary, secondary) => SharedAxisTransition(
+                  animation: primary,
+                  secondaryAnimation: secondary,
+                  transitionType: SharedAxisTransitionType.horizontal,
+                  fillColor: Colors.transparent,
+                  child: child,
+                ),
+                child: KeyedSubtree(
+                  key: ValueKey(_step),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 640),
+                      child: ListView(
+                        padding: EdgeInsets.fromLTRB(narrow ? 22 : 32, narrow ? 28 : 48, narrow ? 22 : 32, 32),
+                        children: [_page()],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (!done)
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Row(
-                  children: [
-                    GlassIconButton(
-                      icon: done ? LucideIcons.check : LucideIcons.x,
-                      tooltip: done ? 'Terminar' : 'Salir sin guardar',
-                      onPressed: () => Navigator.pop(context, done),
-                    ),
-                    const SizedBox(width: 16),
-                    if (!done)
-                      Expanded(
-                        child: _Progress(step: _step.index, total: _asks.length, onJump: _jump),
-                      ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: PageTransitionSwitcher(
-                  duration: Motion.of(context, const Duration(milliseconds: 460)),
-                  reverse: !_forward,
-                  transitionBuilder: (child, primary, secondary) => SharedAxisTransition(
-                    animation: primary,
-                    secondaryAnimation: secondary,
-                    transitionType: SharedAxisTransitionType.horizontal,
-                    fillColor: Colors.transparent,
-                    child: child,
-                  ),
-                  child: KeyedSubtree(
-                    key: ValueKey(_step),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 640),
-                        child: ListView(
-                          padding: EdgeInsets.fromLTRB(narrow ? 22 : 32, narrow ? 28 : 48, narrow ? 22 : 32, 32),
-                          children: [_page()],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (!done)
-                Padding(
-                  padding: EdgeInsets.fromLTRB(narrow ? 22 : 32, 8, narrow ? 22 : 32, 20),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 640),
-                    child: Column(
-                      children: [
-                        if (_formError != null) ...[Notice(message: _formError!), const SizedBox(height: 12)],
-                        Row(
-                          children: [
-                            if (_step != _Step.place)
-                              GhostButton(label: 'Atrás', icon: LucideIcons.arrowLeft, onPressed: () => _go(_Step.values[_step.index - 1])),
-                            if (_step != _Step.place) const SizedBox(width: 12),
-                            Expanded(
-                              child: LampButton(
-                                label: _step == _Step.consent ? (_busy ? 'Guardando la historia' : 'Guardar la historia') : 'Seguir',
-                                icon: _step == _Step.consent ? LucideIcons.circleCheck : LucideIcons.arrowRight,
-                                busy: _busy,
-                                expand: true,
-                                onPressed: _next,
-                              ),
+                padding: EdgeInsets.fromLTRB(narrow ? 22 : 32, 8, narrow ? 22 : 32, 20),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 640),
+                  child: Column(
+                    children: [
+                      if (_formError != null) ...[Notice(message: _formError!), const SizedBox(height: 12)],
+                      Row(
+                        children: [
+                          if (_step != _Step.place)
+                            GhostButton(
+                              label: 'Atrás',
+                              icon: LucideIcons.arrowLeft,
+                              onPressed: () => _go(_Step.values[_step.index - 1]),
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
+                          if (_step != _Step.place) const SizedBox(width: 12),
+                          Expanded(
+                            child: LampButton(
+                              label: _step == _Step.consent
+                                  ? (_busy ? 'Guardando la historia' : 'Guardar la historia')
+                                  : 'Seguir',
+                              icon: _step == _Step.consent ? LucideIcons.circleCheck : LucideIcons.arrowRight,
+                              busy: _busy,
+                              expand: true,
+                              onPressed: _next,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );
@@ -287,7 +297,10 @@ class _ComposePageState extends State<ComposePage> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _question('¿Cómo se llama este sitio?', 'El nombre que usa la gente de allí: la plaza, el lavadero, la casa de la esquina.'),
+            _question(
+              '¿Cómo se llama este sitio?',
+              'El nombre que usa la gente de allí: la plaza, el lavadero, la casa de la esquina.',
+            ),
             _MiniMap(point: widget.point),
             const SizedBox(height: 20),
             TextField(
@@ -316,10 +329,17 @@ class _ComposePageState extends State<ComposePage> {
               onChanged: (_) {
                 if (_titleError != null) setState(() => _titleError = null);
               },
-              decoration: InputDecoration(labelText: 'Título', hintText: 'La noche que se heló la fuente', errorText: _titleError),
+              decoration: InputDecoration(
+                labelText: 'Título',
+                hintText: 'La noche que se heló la fuente',
+                errorText: _titleError,
+              ),
             ),
             const SizedBox(height: 18),
-            Text('¿Qué es?', style: text(size: 14, weight: FontWeight.w600, color: Palette.haze)),
+            Text(
+              '¿Qué es?',
+              style: text(size: 14, weight: FontWeight.w600, color: Palette.haze),
+            ),
             const SizedBox(height: 10),
             Wrap(
               spacing: 8,
@@ -373,20 +393,28 @@ class _ComposePageState extends State<ComposePage> {
                           child: TextButton.icon(
                             onPressed: _pickAudio,
                             icon: const Icon(LucideIcons.paperclip, size: 18),
-                            label: Text(_file == null ? 'O adjunta una grabación que ya tengas' : 'Adjunto: ${_file!.name}'),
+                            label: Text(
+                              _file == null ? 'O adjunta una grabación que ya tengas' : 'Adjunto: ${_file!.name}',
+                            ),
                           ),
                         ),
                       ],
                     ),
             ),
-            if (_storyError != null) ...[const SizedBox(height: 12), Text(_storyError!, style: text(size: 14, color: Palette.alarm))],
+            if (_storyError != null) ...[
+              const SizedBox(height: 12),
+              Text(_storyError!, style: text(size: 14, color: Palette.alarm)),
+            ],
           ],
         );
       case _Step.narrator:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _question('¿Quién la cuenta?', 'Su nombre queda junto a la historia. Si no quiere que aparezca, déjalo en blanco.'),
+            _question(
+              '¿Quién la cuenta?',
+              'Su nombre queda junto a la historia. Si no quiere que aparezca, déjalo en blanco.',
+            ),
             TextField(
               controller: _narrator,
               style: text(size: 18),
@@ -419,7 +447,11 @@ class _ComposePageState extends State<ComposePage> {
                 'Compartir igual',
                 'Cualquiera puede usarla citando la fuente, y lo que haga con ella se comparte igual. Recomendada.',
               ),
-              ('CC-BY-4.0', 'Citando la fuente', 'Cualquiera puede usarla, también en obras cerradas, siempre que diga de dónde sale.'),
+              (
+                'CC-BY-4.0',
+                'Citando la fuente',
+                'Cualquiera puede usarla, también en obras cerradas, siempre que diga de dónde sale.',
+              ),
               ('CC0-1.0', 'Dominio público', 'Sin condiciones. Cualquiera puede usarla sin citar.'),
             ]) ...[
               _LicenseOption(
@@ -511,7 +543,11 @@ class _Progress extends StatelessWidget {
                       const SizedBox(height: 6),
                       Text(
                         _names[i],
-                        style: text(size: 12.5, weight: FontWeight.w600, color: i == step ? Palette.lamp : Palette.haze),
+                        style: text(
+                          size: 12.5,
+                          weight: FontWeight.w600,
+                          color: i == step ? Palette.lamp : Palette.haze,
+                        ),
                       ),
                     ],
                   ),
@@ -543,7 +579,7 @@ class _MiniMap extends StatelessWidget {
               child: FlutterMap(
                 options: MapOptions(initialCenter: point, initialZoom: 16.5, backgroundColor: Palette.deep),
                 children: [
-                  duskTiles(),
+                  teselasVdl(context),
                   MarkerLayer(
                     markers: [
                       Marker(
@@ -640,7 +676,13 @@ class _ModeSwitch extends StatelessWidget {
 }
 
 class _LicenseOption extends StatelessWidget {
-  const _LicenseOption({required this.title, required this.code, required this.detail, required this.selected, required this.onTap});
+  const _LicenseOption({
+    required this.title,
+    required this.code,
+    required this.detail,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String title;
   final String code;
@@ -708,7 +750,14 @@ class _LicenseOption extends StatelessWidget {
 }
 
 class _Toggle extends StatelessWidget {
-  const _Toggle({required this.title, required this.value, required this.onChanged, this.subtitle, this.checkbox = false, this.error});
+  const _Toggle({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+    this.checkbox = false,
+    this.error,
+  });
 
   final String title;
   final String? subtitle;
@@ -725,7 +774,10 @@ class _Toggle extends StatelessWidget {
       child: MergeSemantics(
         child: Row(
           children: [
-            if (checkbox) ...[Checkbox(value: value, onChanged: (v) => onChanged(v ?? false)), const SizedBox(width: 6)],
+            if (checkbox) ...[
+              Checkbox(value: value, onChanged: (v) => onChanged(v ?? false)),
+              const SizedBox(width: 6),
+            ],
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
@@ -734,8 +786,14 @@ class _Toggle extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title, style: text(size: 15.5, weight: FontWeight.w600)),
-                    if (subtitle != null) ...[const SizedBox(height: 2), Text(subtitle!, style: text(size: 13.5, color: Palette.haze))],
-                    if (error != null) ...[const SizedBox(height: 4), Text(error!, style: text(size: 13.5, color: Palette.alarm))],
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(subtitle!, style: text(size: 13.5, color: Palette.haze)),
+                    ],
+                    if (error != null) ...[
+                      const SizedBox(height: 4),
+                      Text(error!, style: text(size: 13.5, color: Palette.alarm)),
+                    ],
                   ],
                 ),
               ),
@@ -758,7 +816,6 @@ class _Done extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final still = MediaQuery.disableAnimationsOf(context);
     Widget lamp = Container(
       width: 120,
       height: 120,
@@ -769,14 +826,6 @@ class _Done extends StatelessWidget {
       ),
       child: const Icon(LucideIcons.lightbulb, size: 52, color: Palette.deep),
     );
-    if (!still) {
-      lamp = lamp
-          .animate()
-          .scale(begin: const Offset(0.3, 0.3), end: const Offset(1, 1), duration: 900.ms, curve: Curves.elasticOut)
-          .fadeIn(duration: 300.ms)
-          .then()
-          .shimmer(duration: 1400.ms, color: Colors.white.withValues(alpha: 0.4));
-    }
     return Column(
       children: [
         const SizedBox(height: 40),

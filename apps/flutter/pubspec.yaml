@@ -41,7 +41,6 @@ dependencies:
   http: ^1.6.0
   file_picker: ^13.1.0
   shared_preferences: ^2.5.5
-  flutter_animate: ^4.5.2
   just_audio: ^0.10.6
   animations: ^3.0.0
   record: ^7.1.1
@@ -89,9 +88,6 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
-
-  shaders:
-    - shaders/dusk.frag
 
   # To add assets to your application, add an assets section, like this:
   # assets:

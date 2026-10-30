@@ -6,8 +6,6 @@ import 'package:voces/shell.dart';
 import 'package:voces/theme/letra.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
-import 'package:voces/ui/blur_gate.dart';
-import 'package:voces/ui/sky.dart';
 import 'package:voces/ui/tokens.dart';
 
 Future<void> main() async {
@@ -48,10 +46,7 @@ class _VocesAppState extends State<VocesApp> {
         theme: vdlTheme(VdlColors.claro, Brightness.light),
         darkTheme: vdlTheme(VdlColors.oscuro, Brightness.dark),
         themeMode: ThemeMode.system,
-        builder: (context, child) => EscalaLetra(
-          preferencia: widget.letra,
-          child: BlurGate(child: child!),
-        ),
+        builder: (context, child) => EscalaLetra(preferencia: widget.letra, child: child!),
         onGenerateRoute: vocesRoute,
         home: AnimatedSwitcher(
           duration: const Duration(milliseconds: 600),
@@ -59,9 +54,7 @@ class _VocesAppState extends State<VocesApp> {
               ? AppShell(api: _api)
               : Scaffold(
                   backgroundColor: Palette.night,
-                  body: Sky(
-                    child: Center(child: Text('Voces del Lugar', style: display(40))),
-                  ),
+                  body: Center(child: Text('Voces del Lugar', style: display(40))),
                 ),
         ),
       ),

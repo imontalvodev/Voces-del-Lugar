@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voces/api.dart';
 import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/voice_terrain.dart';
 
 void main() {
   group('defaultApiBase', () {
@@ -57,23 +56,6 @@ void main() {
       final levels = voiceLevels('una-historia-cualquiera', 64);
       expect(levels, hasLength(64));
       expect(levels.every((l) => l >= 0.1 && l <= 1.0), isTrue);
-    });
-  });
-
-  group('beaconsFromPoints', () {
-    test('el oeste queda a la izquierda y el norte al fondo', () {
-      final beacons = beaconsFromPoints([
-        (id: 'oeste-norte', lat: 40.43, lon: -3.72, label: 'a'),
-        (id: 'este-sur', lat: 40.40, lon: -3.69, label: 'b'),
-      ]);
-      final west = beacons.firstWhere((b) => b.id == 'oeste-norte');
-      final east = beacons.firstWhere((b) => b.id == 'este-sur');
-      expect(west.x, lessThan(east.x));
-      expect(west.z, lessThan(east.z));
-    });
-
-    test('sin historias no hay farolas', () {
-      expect(beaconsFromPoints(const []), isEmpty);
     });
   });
 }

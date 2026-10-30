@@ -7,7 +7,6 @@ import 'package:voces/pages/compose_page.dart';
 import 'package:voces/pages/home_page.dart';
 import 'package:voces/pages/map_page.dart';
 import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/sky.dart';
 import 'package:voces/ui/tokens.dart';
 
 class AppShell extends StatefulWidget {
@@ -21,7 +20,6 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _index = 0;
-  bool _homeHeroVisible = true;
   LatLng? _pendingPoint;
   String? _pendingPlace;
   final _homeKey = GlobalKey<HomePageState>();
@@ -38,8 +36,9 @@ class _AppShellState extends State<AppShell> {
       _pendingPoint = point;
       _pendingPlace = placeName;
       setState(() => _index = 2);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Entra o crea una cuenta y seguimos con la historia de ese sitio.')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Entra o crea una cuenta y seguimos con la historia de ese sitio.')));
       return;
     }
     _pendingPoint = null;
@@ -73,7 +72,6 @@ class _AppShellState extends State<AppShell> {
         api: widget.api,
         onLeaveStory: _choosePointOnMap,
         onOpenMap: () => setState(() => _index = 1),
-        onHeroVisible: (visible) => setState(() => _homeHeroVisible = visible),
       ),
       MapPage(key: _mapKey, api: widget.api, onLeaveStory: _leaveStory),
       AccountPage(
@@ -89,44 +87,35 @@ class _AppShellState extends State<AppShell> {
     ];
     return Scaffold(
       backgroundColor: Palette.night,
-      body: Sky(
-        // El mapa es opaco y tapa el cielo entero; en la portada, lo tapan las
-        // tarjetas en cuanto se baja del héroe.
-        animating: switch (_index) {
-          0 => _homeHeroVisible,
-          1 => false,
-          _ => true,
-        },
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: IndexedStack(
-                index: _index,
-                children: [
-                  for (var i = 0; i < pages.length; i++)
-                    _Reveal(
-                      active: i == _index,
-                      child: TickerMode(enabled: i == _index, child: pages[i]),
-                    ),
-                ],
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(
-                top: false,
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Center(
-                    child: _Dock(index: _index, onSelect: (i) => setState(() => _index = i)),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: IndexedStack(
+              index: _index,
+              children: [
+                for (var i = 0; i < pages.length; i++)
+                  _Reveal(
+                    active: i == _index,
+                    child: TickerMode(enabled: i == _index, child: pages[i]),
                   ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Center(
+                  child: _Dock(index: _index, onSelect: (i) => setState(() => _index = i)),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -234,7 +223,11 @@ class _Dock extends StatelessWidget {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(i == index ? _items[i].$3 : _items[i].$2, size: 22, color: i == index ? Palette.deep : Palette.bone),
+                                Icon(
+                                  i == index ? _items[i].$3 : _items[i].$2,
+                                  size: 22,
+                                  color: i == index ? Palette.deep : Palette.bone,
+                                ),
                                 const SizedBox(height: 3),
                                 AnimatedDefaultTextStyle(
                                   duration: Motion.quick,

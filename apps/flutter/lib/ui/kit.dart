@@ -1,22 +1,19 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:voces/story_format.dart';
-import 'package:voces/ui/blur_gate.dart';
 import 'package:voces/ui/tokens.dart';
 
-/// Superficie de cristal esmerilado sobre el cielo.
+/// Superficie plana de transición: sin cristal ni desenfoque. Desaparece
+/// cuando cada pantalla pase a las piezas de «Placa y registro».
 class Glass extends StatelessWidget {
   const Glass({
     super.key,
     required this.child,
     this.radius = 22,
     this.padding = EdgeInsets.zero,
-    this.tint = Palette.glass,
-    this.blur = 22,
+    this.tint = Palette.glassStrong,
     this.border = true,
   });
 
@@ -24,31 +21,17 @@ class Glass extends StatelessWidget {
   final double radius;
   final EdgeInsetsGeometry padding;
   final Color tint;
-  final double blur;
   final bool border;
 
   @override
   Widget build(BuildContext context) {
-    final shape = BorderRadius.circular(radius);
-    final frosted = blur > 0 && !BlurGate.suspended(context);
-    final surface = DecoratedBox(
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: tint,
-        borderRadius: shape,
+        borderRadius: BorderRadius.circular(radius),
         border: border ? Border.all(color: Palette.glassEdge) : null,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white.withValues(alpha: 0.06), Colors.white.withValues(alpha: 0.0)],
-        ),
       ),
       child: Padding(padding: padding, child: child),
-    );
-    // Desenfocar el fondo en cada fotograma es lo más caro de pintar: con
-    // `blur: 0` queda solo el tinte.
-    return ClipRRect(
-      borderRadius: shape,
-      child: frosted ? BackdropFilter(filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur), child: surface) : surface,
     );
   }
 }
@@ -124,7 +107,14 @@ class _PressableState extends State<Pressable> {
 
 /// Acción principal: una farola encendida.
 class LampButton extends StatelessWidget {
-  const LampButton({super.key, required this.label, required this.onPressed, this.icon, this.busy = false, this.expand = false});
+  const LampButton({
+    super.key,
+    required this.label,
+    required this.onPressed,
+    this.icon,
+    this.busy = false,
+    this.expand = false,
+  });
 
   final String label;
   final VoidCallback? onPressed;
@@ -199,7 +189,6 @@ class GhostButton extends StatelessWidget {
         opacity: onPressed == null ? 0.45 : 1,
         child: Glass(
           radius: 999,
-          blur: 14,
           padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 22),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: compact ? 44 : 54),
@@ -227,7 +216,13 @@ class GhostButton extends StatelessWidget {
 
 /// Botón redondo de icono sobre cristal.
 class GlassIconButton extends StatelessWidget {
-  const GlassIconButton({super.key, required this.icon, required this.tooltip, required this.onPressed, this.size = 46});
+  const GlassIconButton({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.size = 46,
+  });
 
   final IconData icon;
   final String tooltip;
@@ -243,7 +238,6 @@ class GlassIconButton extends StatelessWidget {
         semanticLabel: tooltip,
         child: Glass(
           radius: size,
-          blur: 16,
           tint: Palette.glassStrong.withValues(alpha: 0.55),
           child: SizedBox(
             width: size,
@@ -323,7 +317,12 @@ class FilterPill extends StatelessWidget {
           child: ExcludeSemantics(
             child: Text(
               label,
-              style: text(size: 14, weight: FontWeight.w600, color: selected ? Palette.deep : Palette.bone, height: 1.1),
+              style: text(
+                size: 14,
+                weight: FontWeight.w600,
+                color: selected ? Palette.deep : Palette.bone,
+                height: 1.1,
+              ),
             ),
           ),
         ),
@@ -336,7 +335,15 @@ class FilterPill extends StatelessWidget {
 /// para la misma historia. Con [progress] se colorean las ya escuchadas;
 /// con [alive] respiran como si alguien estuviera hablando.
 class VoicePrint extends StatefulWidget {
-  const VoicePrint({super.key, required this.seed, this.bars = 42, this.progress, this.alive = false, this.height = 44, this.dim = false});
+  const VoicePrint({
+    super.key,
+    required this.seed,
+    this.bars = 42,
+    this.progress,
+    this.alive = false,
+    this.height = 44,
+    this.dim = false,
+  });
 
   final String seed;
   final int bars;
@@ -393,7 +400,13 @@ class _VoicePrintState extends State<VoicePrint> with SingleTickerProviderStateM
       height: widget.height,
       child: CustomPaint(
         size: Size.infinite,
-        painter: _VoicePrintPainter(levels: _levels, progress: widget.progress, time: _time, alive: widget.alive, dim: widget.dim),
+        painter: _VoicePrintPainter(
+          levels: _levels,
+          progress: widget.progress,
+          time: _time,
+          alive: widget.alive,
+          dim: widget.dim,
+        ),
       ),
     );
   }
@@ -417,8 +430,13 @@ List<double> voiceLevels(String seed, int bars) {
 }
 
 class _VoicePrintPainter extends CustomPainter {
-  _VoicePrintPainter({required this.levels, required this.progress, required this.time, required this.alive, required this.dim})
-    : super(repaint: time);
+  _VoicePrintPainter({
+    required this.levels,
+    required this.progress,
+    required this.time,
+    required this.alive,
+    required this.dim,
+  }) : super(repaint: time);
 
   final List<double> levels;
   final double? progress;
@@ -436,7 +454,9 @@ class _VoicePrintPainter extends CustomPainter {
     final paint = Paint()..strokeCap = StrokeCap.round;
     for (var i = 0; i < count; i++) {
       var level = levels[i];
-      if (alive) level = (level * (0.6 + 0.4 * math.sin(t * 7 + i * 0.9) * math.sin(t * 2.3 + i * 0.31)).abs()).clamp(0.08, 1.0);
+      if (alive) {
+        level = (level * (0.6 + 0.4 * math.sin(t * 7 + i * 0.9) * math.sin(t * 2.3 + i * 0.31)).abs()).clamp(0.08, 1.0);
+      }
       final h = math.max(barWidth, level * size.height);
       final x = gap * (i + 0.5);
       final played = progress != null && i < heard;
@@ -457,7 +477,7 @@ class _VoicePrintPainter extends CustomPainter {
       old.progress != progress || old.levels != levels || old.alive != alive || old.dim != dim;
 }
 
-/// Hueco que espera datos: brilla de izquierda a derecha.
+/// Hueco que espera datos, quieto.
 class LoadingSlab extends StatelessWidget {
   const LoadingSlab({super.key, this.height = 160, this.radius = 22});
 
@@ -466,12 +486,10 @@ class LoadingSlab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final box = Container(
+    return Container(
       height: height,
       decoration: BoxDecoration(color: Palette.glass, borderRadius: BorderRadius.circular(radius)),
     );
-    if (MediaQuery.disableAnimationsOf(context)) return box;
-    return box.animate(onPlay: (c) => c.repeat()).shimmer(duration: 1600.ms, color: Palette.bone.withValues(alpha: 0.08));
   }
 }
 

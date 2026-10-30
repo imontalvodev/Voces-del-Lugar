@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
 import 'package:voces/links.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/audio.dart';
 import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/sky.dart';
 import 'package:voces/ui/story_card.dart';
 import 'package:voces/ui/tokens.dart';
-import 'package:voces/ui/voice_terrain.dart';
 
 class StoryPage extends StatefulWidget {
   const StoryPage({super.key, required this.story});
@@ -53,7 +50,8 @@ class _StoryPageState extends State<StoryPage> {
   Future<void> _copyLink() async {
     await Clipboard.setData(ClipboardData(text: storyLink(_story.id, Uri.base)));
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enlace copiado. Quien lo abra llega a esta historia.')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Enlace copiado. Quien lo abra llega a esta historia.')));
   }
 
   /// La tarjeta pudo quedarse vieja: se trae la ficha como está ahora.
@@ -151,153 +149,133 @@ class _StoryPageState extends State<StoryPage> {
     final width = MediaQuery.sizeOf(context).width;
     final titleSize = width < 600 ? 46.0 : 72.0;
     final body = story.body?.trim() ?? '';
-    final fade = !MediaQuery.disableAnimationsOf(context);
-    Widget reveal(Widget child, int order) {
-      if (!fade) return child;
-      return child
-          .animate(delay: (160 + order * 70).ms)
-          .fadeIn(duration: 520.ms, curve: Motion.out)
-          .moveY(begin: 14, end: 0, duration: 520.ms, curve: Motion.out);
-    }
-
     return Scaffold(
       backgroundColor: Palette.night,
-      body: Sky(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: width < 600 ? 280 : 360,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: ShaderMask(
-                        blendMode: BlendMode.dstIn,
-                        shaderCallback: (rect) => const LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.white, Colors.white, Colors.transparent],
-                          stops: [0, 0.62, 1],
-                        ).createShader(rect),
-                        child: VoiceTerrain(
-                          rows: 26,
-                          horizon: 0.3,
-                          energy: _energy,
-                          selectedId: story.id,
-                          beacons: [TerrainBeacon(id: story.id, x: 0.0, z: 0.55, label: story.placeName)],
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: width < 600 ? 280 : 360,
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 16,
+                    top: 0,
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: GlassIconButton(
+                          icon: LucideIcons.arrowLeft,
+                          tooltip: 'Volver',
+                          onPressed: () => Navigator.maybePop(context),
                         ),
                       ),
                     ),
+                  ),
+                  if (story.published)
                     Positioned(
-                      left: 16,
+                      right: 16,
                       top: 0,
                       child: SafeArea(
                         child: Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: GlassIconButton(
-                            icon: LucideIcons.arrowLeft,
-                            tooltip: 'Volver',
-                            onPressed: () => Navigator.maybePop(context),
+                            icon: LucideIcons.link,
+                            tooltip: 'Copiar enlace',
+                            onPressed: _copyLink,
                           ),
                         ),
                       ),
                     ),
-                    if (story.published)
-                      Positioned(
-                        right: 16,
-                        top: 0,
-                        child: SafeArea(
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: GlassIconButton(icon: LucideIcons.link, tooltip: 'Copiar enlace', onPressed: _copyLink),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
+                ],
               ),
             ),
-            SliverToBoxAdapter(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(width < 600 ? 22 : 32, 0, width < 600 ? 22 : 32, 72),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        reveal(
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 6,
-                            crossAxisAlignment: WrapCrossAlignment.center,
+          ),
+          SliverToBoxAdapter(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(width < 600 ? 22 : 32, 0, width < 600 ? 22 : 32, 72),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(LucideIcons.mapPin, size: 17, color: Palette.lamp),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    story.placeName,
-                                    style: text(size: 16, weight: FontWeight.w600, color: Palette.lamp),
-                                  ),
-                                ],
+                              const Icon(LucideIcons.mapPin, size: 17, color: Palette.lamp),
+                              const SizedBox(width: 6),
+                              Text(
+                                story.placeName,
+                                style: text(size: 16, weight: FontWeight.w600, color: Palette.lamp),
                               ),
-                              Text(coordinateLabel(story.point), style: text(size: 13.5, color: Palette.haze)),
                             ],
                           ),
-                          0,
-                        ),
-                        const SizedBox(height: 16),
-                        reveal(Text(story.title, style: display(titleSize)), 1),
-                        const SizedBox(height: 16),
-                        reveal(Text(narratorLine(story), style: text(size: 18, color: Palette.bone.withValues(alpha: 0.86))), 2),
-                        if ((story.narratorRelation ?? '').trim().isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          reveal(Text(story.narratorRelation!.trim(), style: text(size: 15, color: Palette.haze)), 2),
+                          Text(coordinateLabel(story.point), style: text(size: 13.5, color: Palette.haze)),
                         ],
-                        if (story.mediaUrls.isNotEmpty) ...[
-                          const SizedBox(height: 32),
-                          reveal(StoryPlayer(url: story.mediaUrls.first, seed: story.id, energy: _energy), 3),
-                        ],
-                        if (body.isNotEmpty) ...[
-                          const SizedBox(height: 36),
-                          reveal(SelectableText(body, style: text(size: 19, height: 1.72, color: Palette.bone.withValues(alpha: 0.94))), 4),
-                        ],
-                        const SizedBox(height: 44),
-                        Container(height: 1, color: Palette.glassEdge),
-                        const SizedBox(height: 20),
-                        Wrap(
-                          spacing: 14,
-                          runSpacing: 10,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            StatusChip(status: story.status),
-                            Text(categoryLabel(story.category), style: text(size: 14, color: Palette.haze)),
-                            if (decadeLabel(story.decade) case final decade?)
-                              Text(decade, style: text(size: 14, color: Palette.haze)),
-                            Text('Licencia ${licenseLabel(story.license)}', style: text(size: 14, color: Palette.haze)),
-                          ],
-                        ),
-                        if (actions.isNotEmpty) ...[
-                          const SizedBox(height: 28),
-                          Wrap(spacing: 12, runSpacing: 12, children: actions),
-                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Text(story.title, style: display(titleSize)),
+                      const SizedBox(height: 16),
+                      Text(narratorLine(story), style: text(size: 18, color: Palette.bone.withValues(alpha: 0.86))),
+                      if ((story.narratorRelation ?? '').trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(story.narratorRelation!.trim(), style: text(size: 15, color: Palette.haze)),
                       ],
-                    ),
+                      if (story.mediaUrls.isNotEmpty) ...[
+                        const SizedBox(height: 32),
+                        StoryPlayer(url: story.mediaUrls.first, seed: story.id, energy: _energy),
+                      ],
+                      if (body.isNotEmpty) ...[
+                        const SizedBox(height: 36),
+                        SelectableText(
+                          body,
+                          style: text(size: 19, height: 1.72, color: Palette.bone.withValues(alpha: 0.94)),
+                        ),
+                      ],
+                      const SizedBox(height: 44),
+                      Container(height: 1, color: Palette.glassEdge),
+                      const SizedBox(height: 20),
+                      Wrap(
+                        spacing: 14,
+                        runSpacing: 10,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          StatusChip(status: story.status),
+                          Text(categoryLabel(story.category), style: text(size: 14, color: Palette.haze)),
+                          if (decadeLabel(story.decade) case final decade?)
+                            Text(decade, style: text(size: 14, color: Palette.haze)),
+                          Text('Licencia ${licenseLabel(story.license)}', style: text(size: 14, color: Palette.haze)),
+                        ],
+                      ),
+                      if (actions.isNotEmpty) ...[
+                        const SizedBox(height: 28),
+                        Wrap(spacing: 12, runSpacing: 12, children: actions),
+                      ],
+                    ],
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
 
 /// Pregunta antes de algo que cambia lo que ve todo el mundo.
-Future<bool> confirm(BuildContext context, {required String title, required String message, required String action}) async {
+Future<bool> confirm(
+  BuildContext context, {
+  required String title,
+  required String message,
+  required String action,
+}) async {
   final answer = await showDialog<bool>(
     context: context,
     builder: (context) => _GlassDialog(
@@ -325,7 +303,10 @@ typedef StoryEdit = ({String title, String body, String narratorName, String nar
 
 /// Formulario para corregir una historia que sigue en revisión.
 Future<StoryEdit?> editStory(BuildContext context, StoryPin story) {
-  return showDialog<StoryEdit>(context: context, builder: (_) => _StoryEditor(story: story));
+  return showDialog<StoryEdit>(
+    context: context,
+    builder: (_) => _StoryEditor(story: story),
+  );
 }
 
 class _StoryEditor extends StatefulWidget {

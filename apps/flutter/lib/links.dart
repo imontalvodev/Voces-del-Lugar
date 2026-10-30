@@ -3,7 +3,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
 import 'package:voces/pages/story_page.dart';
 import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/sky.dart';
 import 'package:voces/ui/tokens.dart';
 
 /// La dirección propia de cada historia, para poder compartirla.
@@ -34,7 +33,10 @@ Route<void> storyRoute(StoryPin story) {
 Route<void>? vocesRoute(RouteSettings settings) {
   final id = storyIdFromPath(settings.name);
   if (id == null) return null;
-  return MaterialPageRoute<void>(settings: settings, builder: (_) => StoryLoader(id: id));
+  return MaterialPageRoute<void>(
+    settings: settings,
+    builder: (_) => StoryLoader(id: id),
+  );
 }
 
 /// Trae por su id la historia de un enlace y la abre; si no existe, lo dice.
@@ -67,10 +69,8 @@ class _StoryLoaderState extends State<StoryLoader> {
         if (story != null) return (widget.page ?? (s) => StoryPage(story: s))(story);
         return Scaffold(
           backgroundColor: Palette.night,
-          body: Sky(
-            child: Center(
-              child: snapshot.hasError ? const _Missing() : const SizedBox(width: 280, child: LoadingSlab(height: 120)),
-            ),
+          body: Center(
+            child: snapshot.hasError ? const _Missing() : const SizedBox(width: 280, child: LoadingSlab(height: 120)),
           ),
         );
       },

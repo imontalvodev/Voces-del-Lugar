@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -10,9 +9,8 @@ import 'package:voces/api.dart';
 import 'package:voces/links.dart';
 import 'package:voces/locate.dart';
 import 'package:voces/story_format.dart';
-import 'package:voces/ui/dusk_tiles.dart';
+import 'package:voces/ui/teselas.dart';
 import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/blur_gate.dart';
 import 'package:voces/ui/story_card.dart';
 import 'package:voces/ui/tokens.dart';
 
@@ -35,7 +33,10 @@ class MapPage extends StatefulWidget {
 class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   final _map = MapController();
   final _query = TextEditingController();
-  late final AnimationController _flight = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
+  late final AnimationController _flight = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
   VoidCallback? _flightStep;
   final _sheet = DraggableScrollableController();
   final _panelScroll = ScrollController();
@@ -90,7 +91,10 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     return [
       for (final story in _stories)
         if ((_category == null || story.category == _category) &&
-            (q.isEmpty || '${story.title} ${story.placeName} ${story.narratorName ?? ''} ${story.body ?? ''}'.toLowerCase().contains(q)))
+            (q.isEmpty ||
+                '${story.title} ${story.placeName} ${story.narratorName ?? ''} ${story.body ?? ''}'
+                    .toLowerCase()
+                    .contains(q)))
           story,
     ];
   }
@@ -352,7 +356,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
                   ],
                 ),
               ),
-            ).animate().fadeIn(duration: 240.ms).moveY(begin: -10, end: 0, curve: Motion.out),
+            ),
           ),
         Positioned(
           left: 16,
@@ -362,7 +366,10 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
             child: SafeArea(
               child: Padding(
                 padding: EdgeInsets.only(top: wide ? 0 : 128),
-                child: Text('© colaboradores de OpenStreetMap', style: text(size: 11, color: Palette.haze.withValues(alpha: 0.8))),
+                child: Text(
+                  '© colaboradores de OpenStreetMap',
+                  style: text(size: 11, color: Palette.haze.withValues(alpha: 0.8)),
+                ),
               ),
             ),
           ),
@@ -444,13 +451,12 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
         onMapEvent: (event) {
           if (event.source != MapEventSource.mapController && event.source != MapEventSource.nonRotatedSizeChange) {
             _moves++;
-            BlurGate.of(context).ping(); // los cristales no desenfocan un mapa en movimiento
             _scheduleReload();
           }
         },
       ),
       children: [
-        duskTiles(),
+        teselasVdl(context),
         MarkerLayer(
           markers: [
             for (final story in onePinPerPlace(visible))
@@ -496,7 +502,10 @@ class LampPin extends StatefulWidget {
 }
 
 class _LampPinState extends State<LampPin> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800));
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  );
   var _hover = false;
 
   @override
@@ -583,7 +592,8 @@ class _LampPinPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _LampPinPainter old) => old.phase != phase || old.selected != selected || old.hover != hover;
+  bool shouldRepaint(covariant _LampPinPainter old) =>
+      old.phase != phase || old.selected != selected || old.hover != hover;
 }
 
 /// Marca provisional: cae y rebota sobre el sitio tocado.
@@ -613,8 +623,7 @@ class DraftPin extends StatelessWidget {
         ),
       ],
     );
-    if (MediaQuery.disableAnimationsOf(context)) return pin;
-    return pin.animate().moveY(begin: -60, end: 0, duration: 620.ms, curve: Curves.bounceOut).fadeIn(duration: 160.ms);
+    return pin;
   }
 }
 
@@ -718,7 +727,6 @@ class _SearchBar extends StatelessWidget {
           const SizedBox(height: 8),
           Glass(
             radius: 22,
-            blur: 0, // con 94% de tinte el desenfoque no se aprecia
             tint: Palette.glassStrong.withValues(alpha: 0.94),
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
@@ -747,9 +755,19 @@ class _SearchBar extends StatelessWidget {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(hit.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 15, weight: FontWeight.w600, height: 1.25)),
+                                  Text(
+                                    hit.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: text(size: 15, weight: FontWeight.w600, height: 1.25),
+                                  ),
                                   if (hit.context.isNotEmpty || hit.kindLabel.isNotEmpty)
-                                    Text([hit.kindLabel, hit.context].where((p) => p.isNotEmpty).join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis, style: text(size: 12.5, color: Palette.haze, height: 1.3)),
+                                    Text(
+                                      [hit.kindLabel, hit.context].where((p) => p.isNotEmpty).join(' · '),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: text(size: 12.5, color: Palette.haze, height: 1.3),
+                                    ),
                                 ],
                               ),
                             ),
@@ -770,7 +788,11 @@ class _SearchBar extends StatelessWidget {
             child: Row(
               children: [
                 for (final c in categories) ...[
-                  FilterPill(label: categoryLabel(c), selected: category == c, onTap: () => onCategory(category == c ? null : c)),
+                  FilterPill(
+                    label: categoryLabel(c),
+                    selected: category == c,
+                    onTap: () => onCategory(category == c ? null : c),
+                  ),
                   const SizedBox(width: 8),
                 ],
               ],
@@ -860,7 +882,12 @@ class _Panel extends StatelessWidget {
         if (s.id != selected?.id && !here.contains(s)) s,
     ];
     final focus = draft != null
-        ? _DraftFocus(key: const ValueKey('draft'), point: draft!, onWrite: () => onWrite(draft!), onClear: onClearDraft)
+        ? _DraftFocus(
+            key: const ValueKey('draft'),
+            point: draft!,
+            onWrite: () => onWrite(draft!),
+            onClear: onClearDraft,
+          )
         : selected != null
         ? _StoryFocus(
             key: ValueKey(selected!.id),
@@ -879,7 +906,10 @@ class _Panel extends StatelessWidget {
               margin: const EdgeInsets.only(top: 10, bottom: 6),
               width: 42,
               height: 4,
-              decoration: BoxDecoration(color: Palette.haze.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(
+                color: Palette.haze.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(4),
+              ),
             ),
           ),
         ),
@@ -900,7 +930,9 @@ class _Panel extends StatelessWidget {
                     child: child,
                   ),
                 ),
-                child: focus ?? _Heading(key: const ValueKey('heading'), count: visible.length, total: total, loading: loading),
+                child:
+                    focus ??
+                    _Heading(key: const ValueKey('heading'), count: visible.length, total: total, loading: loading),
               ),
             ),
           ),
@@ -917,7 +949,9 @@ class _Panel extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
             sliver: SliverToBoxAdapter(
               child: Text(
-                here.length == 1 ? 'Otra historia en este mismo sitio' : '${here.length} historias más en este mismo sitio',
+                here.length == 1
+                    ? 'Otra historia en este mismo sitio'
+                    : '${here.length} historias más en este mismo sitio',
                 style: text(size: 14, weight: FontWeight.w600, color: Palette.lamp),
               ),
             ),
@@ -926,7 +960,8 @@ class _Panel extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             sliver: SliverList.builder(
               itemCount: here.length,
-              itemBuilder: (context, index) => _Row(story: here[index], selected: false, onTap: () => onSelect(here[index])),
+              itemBuilder: (context, index) =>
+                  _Row(story: here[index], selected: false, onTap: () => onSelect(here[index])),
             ),
           ),
         ],
@@ -977,7 +1012,9 @@ class _Heading extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          loading && total == 0 ? 'Buscando historias…' : (count == 1 ? 'Una historia en esta vista' : '$count historias en esta vista'),
+          loading && total == 0
+              ? 'Buscando historias…'
+              : (count == 1 ? 'Una historia en esta vista' : '$count historias en esta vista'),
           style: display(30),
         ),
         const SizedBox(height: 6),
@@ -991,7 +1028,13 @@ class _Heading extends StatelessWidget {
 }
 
 class _StoryFocus extends StatelessWidget {
-  const _StoryFocus({super.key, required this.story, required this.onOpen, required this.onClose, required this.onWriteHere});
+  const _StoryFocus({
+    super.key,
+    required this.story,
+    required this.onOpen,
+    required this.onClose,
+    required this.onWriteHere,
+  });
 
   final StoryPin story;
   final VoidCallback onOpen;
