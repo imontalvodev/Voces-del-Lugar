@@ -20,10 +20,19 @@ Future<EstadoPermiso> permisoMicro() async {
   }
 }
 
+/// Pide el micrófono. En Android pide también los avisos (desde Android 13
+/// hacen falta) para que la notificación fija de «Grabando» se vea con el
+/// móvil bloqueado; si se niegan, la grabación sigue igual.
 Future<EstadoPermiso> pedirMicro() async {
   if (kIsWeb) return EstadoPermiso.preguntable;
   try {
-    return estadoDe(await Permission.microphone.request());
+    final micro = estadoDe(await Permission.microphone.request());
+    if (micro == EstadoPermiso.concedido && defaultTargetPlatform == TargetPlatform.android) {
+      try {
+        await Permission.notification.request();
+      } catch (_) {}
+    }
+    return micro;
   } catch (_) {
     return EstadoPermiso.preguntable;
   }

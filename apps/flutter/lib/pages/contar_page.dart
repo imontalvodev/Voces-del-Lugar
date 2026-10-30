@@ -322,7 +322,9 @@ class ContarPageState extends State<ContarPage> {
       context,
       icono: LucideIcons.mic,
       titulo: 'Para grabar, la app necesita el micrófono',
-      texto: 'Solo se usa mientras grabas. Ahora tu móvil te lo preguntará: pulsa «Permitir».',
+      texto:
+          'Solo se usa mientras grabas. Ahora tu móvil te lo preguntará: pulsa «Permitir». '
+          'Si también pregunta por los avisos, permítelos: así verás que sigue grabando con el móvil bloqueado.',
     );
     if (seguir) await widget.pedirMicro();
     return seguir;
