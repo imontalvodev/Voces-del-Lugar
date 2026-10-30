@@ -3,7 +3,15 @@
 <plist version="1.0">
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Para grabar la historia tal como la cuenta quien la recuerda.</string>
+	<string>Para grabar las historias que te cuentan. Solo se usa mientras grabas.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Para enseñarte las historias que hay cerca de ti. Basta con la ubicación aproximada.</string>
+	<key>NSLocationDefaultAccuracyReduced</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

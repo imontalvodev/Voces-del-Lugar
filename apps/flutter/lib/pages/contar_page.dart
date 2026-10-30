@@ -8,12 +8,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voces/api.dart';
 import 'package:voces/borrador.dart';
 import 'package:voces/links.dart';
-import 'package:voces/locate.dart';
 import 'package:voces/pages/entrar_page.dart';
+import 'package:voces/permisos.dart';
+import 'package:voces/permisos.dart' as permisos show permisoMicro, pedirMicro;
 import 'package:voces/story_format.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
@@ -40,12 +40,16 @@ class ContarPage extends StatefulWidget {
     required this.onSalir,
     required this.onVerLoHecho,
     this.conTeselas = true,
+    this.permisoMicro = permisos.permisoMicro,
+    this.pedirMicro = permisos.pedirMicro,
   });
 
   final VocesApi api;
   final VoidCallback onSalir;
   final VoidCallback onVerLoHecho;
   final bool conTeselas;
+  final Future<EstadoPermiso> Function() permisoMicro;
+  final Future<EstadoPermiso> Function() pedirMicro;
 
   @override
   State<ContarPage> createState() => ContarPageState();
@@ -308,18 +312,19 @@ class ContarPageState extends State<ContarPage> {
     }
   }
 
+  /// Antes de que el móvil pregunte por el micrófono, una pantalla propia lo
+  /// explica; si ya está dado o se negó para siempre, no hace falta.
   Future<bool> _explicarMicro() async {
     if (kIsWeb) return true;
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool('micro_explicado') ?? false) return true;
-    if (!mounted) return false;
+    final estado = await widget.permisoMicro();
+    if (estado != EstadoPermiso.preguntable || !mounted) return true;
     final seguir = await explicarPermiso(
       context,
       icono: LucideIcons.mic,
       titulo: 'Para grabar, la app necesita el micrófono',
       texto: 'Solo se usa mientras grabas. Ahora tu móvil te lo preguntará: pulsa «Permitir».',
     );
-    if (seguir) await prefs.setBool('micro_explicado', true);
+    if (seguir) await widget.pedirMicro();
     return seguir;
   }
 
@@ -668,7 +673,7 @@ class ContarPageState extends State<ContarPage> {
             onCambio: (g) => _cambiar(() => _grabacion = g),
             onEscribir: () => _cambiar(() => _b.modo = 'escribir'),
             antesDePedir: _explicarMicro,
-            abrirAjustes: openLocationSettings,
+            abrirAjustes: abrirAjustesApp,
           ),
         },
         if (_intentoHistoria && !_hayHistoria) ...[

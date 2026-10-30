@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:voces/api.dart';
 import 'package:voces/links.dart';
 import 'package:voces/navegacion.dart';
@@ -74,6 +75,17 @@ class _StoryPageState extends State<StoryPage> {
   Future<void> _copiar() async {
     await Clipboard.setData(ClipboardData(text: enlacePublico(_story.id)));
     if (mounted) mostrarNotificacion(context, 'Enlace copiado. Ya puedes pegarlo donde quieras.');
+  }
+
+  Future<void> _compartir() async {
+    final enlace = enlacePublico(_story.id);
+    try {
+      await SharePlus.instance.share(
+        ShareParams(title: _story.title, subject: _story.title, text: '${_story.title}\n$enlace'),
+      );
+    } catch (_) {
+      await _copiar();
+    }
   }
 
   Future<void> _run(
@@ -148,6 +160,7 @@ class _StoryPageState extends State<StoryPage> {
       story: _story,
       escuchar: widget.escuchar,
       onCopiar: _copiar,
+      onCompartir: kIsWeb ? null : _compartir,
       onCorregir: (_api?.owns(_story) ?? false) && _story.pending && !_busy ? _corregir : null,
     );
     final lateral = [
@@ -204,11 +217,20 @@ class _StoryPageState extends State<StoryPage> {
 }
 
 class _Ficha extends StatelessWidget {
-  const _Ficha({required this.story, required this.escuchar, required this.onCopiar, required this.onCorregir});
+  const _Ficha({
+    required this.story,
+    required this.escuchar,
+    required this.onCopiar,
+    required this.onCorregir,
+    this.onCompartir,
+  });
 
   final StoryPin story;
   final bool escuchar;
   final VoidCallback onCopiar;
+
+  /// En el móvil, la hoja de compartir del sistema; en web no hay.
+  final VoidCallback? onCompartir;
   final VoidCallback? onCorregir;
 
   @override
@@ -348,9 +370,19 @@ class _Ficha extends StatelessWidget {
                   runSpacing: 10,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
+                    if (onCompartir != null)
+                      BotonPlaca(
+                        etiqueta: 'Compartir',
+                        icono: Theme.of(context).platform == TargetPlatform.iOS
+                            ? LucideIcons.share
+                            : LucideIcons.share2,
+                        expandir: !amplio,
+                        onPressed: onCompartir,
+                      ),
                     BotonPlaca(
                       etiqueta: 'Copiar enlace',
                       icono: LucideIcons.link2,
+                      variante: onCompartir == null ? VarianteBoton.principal : VarianteBoton.secundario,
                       expandir: !amplio,
                       onPressed: onCopiar,
                     ),

@@ -77,6 +77,7 @@ void main() {
     expect(find.text('Por la mañana los críos patinaban en el pilón.'), findsOneWidget);
     expect(find.textContaining('Compartir igual', findRichText: true), findsOneWidget);
     expect(find.text('Copiar enlace'), findsOneWidget);
+    expect(find.text('Compartir'), findsOneWidget);
     expect(find.text('vocesdellugar.org/historia/s1'), findsOneWidget);
     expect(find.text('Dónde pasó'), findsOneWidget);
     expect(find.text('Herramientas de moderación'), findsNothing);
