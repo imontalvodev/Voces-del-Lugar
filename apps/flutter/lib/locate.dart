@@ -15,6 +15,23 @@ Future<LatLng?> resolveLocation({
   return read();
 }
 
+/// Cómo está el permiso de ubicación: «denied» (aún se puede preguntar),
+/// «deniedForever», «whileInUse», «always» o «unableToDetermine».
+Future<String> locationPermission() async {
+  try {
+    return (await Geolocator.checkPermission()).name;
+  } catch (_) {
+    return 'unableToDetermine';
+  }
+}
+
+/// Abre los Ajustes de la app para dar el permiso a mano.
+Future<void> openLocationSettings() async {
+  try {
+    await Geolocator.openAppSettings();
+  } catch (_) {}
+}
+
 /// Dónde está el dispositivo, o null si no se puede saber. En web fuera de
 /// HTTPS el navegador no la da: entonces también es null.
 Future<LatLng?> deviceLocation({bool ask = true}) async {

@@ -1,30 +1,49 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voces/api.dart';
 import 'package:voces/links.dart';
 import 'package:voces/locate.dart';
 import 'package:voces/story_format.dart';
+import 'package:voces/theme/vdl_colors.dart';
+import 'package:voces/theme/vdl_theme.dart';
+import 'package:voces/ui/avisos.dart';
+import 'package:voces/ui/estados.dart';
+import 'package:voces/ui/ficha.dart';
+import 'package:voces/ui/pagina.dart';
+import 'package:voces/ui/permiso.dart';
+import 'package:voces/ui/placa.dart';
+import 'package:voces/ui/placa_mapa.dart';
 import 'package:voces/ui/teselas.dart';
-import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/story_card.dart';
-import 'package:voces/ui/tokens.dart';
 
-const _home = LatLng(40.416, -3.703);
-
-/// Espacio que deja libre el dock de navegación al pie.
-const dockClearance = 104.0;
+/// Sin centro guardado ni ubicación, el mapa enseña España entera.
+const _inicioPorDefecto = (centro: LatLng(40.2, -3.7), zoom: 6.0);
 
 class MapPage extends StatefulWidget {
-  const MapPage({super.key, required this.api, required this.onLeaveStory, this.locate = deviceLocation});
+  const MapPage({
+    super.key,
+    required this.api,
+    required this.onLeaveStory,
+    this.locate = deviceLocation,
+    this.permiso = locationPermission,
+    this.abrirAjustes = openLocationSettings,
+    this.conTeselas = true,
+  });
 
   final VocesApi api;
   final void Function(LatLng point, [String? placeName]) onLeaveStory;
   final Future<LatLng?> Function({bool ask}) locate;
+  final Future<String> Function() permiso;
+  final Future<void> Function() abrirAjustes;
+
+  /// En los tests no se piden teselas a la red.
+  final bool conTeselas;
 
   @override
   State<MapPage> createState() => MapPageState();
@@ -35,35 +54,36 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
   final _query = TextEditingController();
   late final AnimationController _flight = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1100),
+    duration: const Duration(milliseconds: 900),
   );
   VoidCallback? _flightStep;
-  final _sheet = DraggableScrollableController();
-  final _panelScroll = ScrollController();
-  ScrollController? _sheetScroll;
   Timer? _debounce;
-  List<StoryPin> _stories = [];
-  String? _selectedId;
-  String? _category;
-  LatLng? _draft;
-  String? _error;
-  bool _ready = false;
-  bool _placing = false;
-  bool _loading = false;
-  bool _locating = false;
-  List<PlaceHit> _places = [];
-  bool _searchingPlaces = false;
   Timer? _placeDebounce;
+  List<StoryPin> _stories = [];
+  String? _lugarId;
+  LatLng? _pin;
+  bool _lista = false;
+  bool _ready = false;
+  bool _cargando = true;
+  bool _sinConexion = false;
+  bool _sinUbicacion = false;
+  bool _localizando = false;
+  bool _colocando = false;
+  List<PlaceHit> _places = [];
+  bool _buscandoLugares = false;
   int _placeQuery = 0;
+  int _reloadTicket = 0;
+  ({LatLng centro, double zoom})? _inicio;
 
-  /// Cuenta los movimientos que hace quien mira: si se mueve mientras se
-  /// espera la posición, no se le arrastra.
+  /// Cuenta los movimientos de quien mira: si se mueve mientras se espera la
+  /// posición, no se le arrastra.
   int _moves = 0;
 
   @override
   void initState() {
     super.initState();
     widget.api.changes.addListener(reload);
+    _cargarInicio();
   }
 
   @override
@@ -71,37 +91,51 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     widget.api.changes.removeListener(reload);
     _placeDebounce?.cancel();
     _debounce?.cancel();
-    _sheet.dispose();
-    _panelScroll.dispose();
     _flight.dispose();
     _query.dispose();
     super.dispose();
   }
 
-  /// Pone el mapa en modo "marcar sitio" (lo usa el botón de la portada).
+  Future<void> _cargarInicio() async {
+    var inicio = _inicioPorDefecto;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final guardado = prefs.getStringList('mapa_centro');
+      if (guardado != null && guardado.length == 3) {
+        inicio = (
+          centro: LatLng(double.parse(guardado[0]), double.parse(guardado[1])),
+          zoom: double.parse(guardado[2]),
+        );
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _inicio = inicio);
+  }
+
+  Future<void> _guardarCentro() async {
+    if (!_ready) return;
+    final camara = _map.camera;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('mapa_centro', [
+        '${camara.center.latitude}',
+        '${camara.center.longitude}',
+        '${camara.zoom}',
+      ]);
+    } catch (_) {}
+  }
+
+  /// Pide marcar el sitio exacto tocando el mapa (lo usa «Contar»).
   void beginPlacing() {
     setState(() {
-      _placing = true;
-      _selectedId = null;
+      _colocando = true;
+      _lugarId = null;
+      _lista = false;
     });
   }
 
-  List<StoryPin> get _visible {
-    final q = _query.text.trim().toLowerCase();
-    return [
-      for (final story in _stories)
-        if ((_category == null || story.category == _category) &&
-            (q.isEmpty ||
-                '${story.title} ${story.placeName} ${story.narratorName ?? ''} ${story.body ?? ''}'
-                    .toLowerCase()
-                    .contains(q)))
-          story,
-    ];
-  }
+  List<Lugar> get _lugares => lugaresDe(_stories);
 
-  StoryPin? get _selected => _stories.where((s) => s.id == _selectedId).firstOrNull;
-
-  int _reloadTicket = 0;
+  Lugar? get _lugar => _lugares.where((l) => l.id == _lugarId).firstOrNull;
 
   Future<void> reload() async {
     if (!_ready || !mounted) return;
@@ -109,7 +143,6 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     final bounds = _map.camera.visibleBounds;
     // Muy alejado, el recuadro puede dar la vuelta al mundo: entonces se pide entero.
     final wraps = bounds.west >= bounds.east || bounds.east - bounds.west >= 360;
-    setState(() => _loading = true);
     try {
       final stories = await widget.api.mapStories(
         wraps ? -180 : bounds.west,
@@ -120,19 +153,25 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
       if (!mounted || ticket != _reloadTicket) return;
       setState(() {
         _stories = stories;
-        _error = null;
-        if (_selectedId != null && stories.every((s) => s.id != _selectedId)) _selectedId = null;
+        _sinConexion = false;
+        if (_lugarId != null && stories.every((s) => s.placeId != _lugarId)) _lugarId = null;
       });
-    } on ApiException catch (error) {
-      if (mounted && ticket == _reloadTicket) setState(() => _error = error.message);
     } catch (_) {
-      if (mounted && ticket == _reloadTicket) setState(() => _error = 'No hay conexión con el archivo.');
+      if (mounted && ticket == _reloadTicket) setState(() => _sinConexion = true);
     } finally {
-      if (mounted && ticket == _reloadTicket) setState(() => _loading = false);
+      if (mounted && ticket == _reloadTicket) setState(() => _cargando = false);
     }
   }
 
-  /// Busca ciudades y sitios por nombre mientras se escribe.
+  void _scheduleReload() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 320), () {
+      reload();
+      _guardarCentro();
+    });
+  }
+
+  /// Busca pueblos, barrios y calles mientras se escribe.
   void _searchPlaces(String value) {
     _placeDebounce?.cancel();
     final query = value.trim();
@@ -140,11 +179,11 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     if (query.length < 3) {
       setState(() {
         _places = [];
-        _searchingPlaces = false;
+        _buscandoLugares = false;
       });
       return;
     }
-    setState(() => _searchingPlaces = true);
+    setState(() => _buscandoLugares = true);
     _placeDebounce = Timer(const Duration(milliseconds: 450), () async {
       List<PlaceHit> hits;
       try {
@@ -155,60 +194,79 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
       if (!mounted || ticket != _placeQuery) return;
       setState(() {
         _places = hits;
-        _searchingPlaces = false;
+        _buscandoLugares = false;
       });
     });
   }
 
   void _goToPlace(PlaceHit hit) {
     _placeQuery++;
-    _query.clear();
+    _query.text = hit.name;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _places = [];
-      _searchingPlaces = false;
-      _selectedId = null;
+      _buscandoLugares = false;
+      _lugarId = null;
+      _lista = false;
+      _sinUbicacion = false;
     });
-    _flyTo(hit.point, 14);
+    _flyTo(hit.point, hit.isSettlement ? 14 : 16);
   }
 
   /// Al abrir, si ya hay permiso, el mapa empieza donde está quien mira.
   Future<void> _startNearUser() async {
-    final moves = _moves;
-    final point = await widget.locate(ask: false);
-    if (!mounted || point == null || moves != _moves) return;
-    _flyTo(point, 14);
+    if (await widget.permiso() case 'whileInUse' || 'always') {
+      final moves = _moves;
+      final point = await widget.locate(ask: false);
+      if (!mounted || point == null || moves != _moves) return;
+      _flyTo(point, 14);
+    }
   }
 
-  Future<void> _goToUser() async {
-    if (_locating) return;
-    setState(() => _locating = true);
-    final messenger = ScaffoldMessenger.of(context);
+  /// «Aquí»: la ubicación se pide al pulsar, nunca al abrir la app, y antes
+  /// una pantalla propia explica para qué.
+  Future<void> _aqui() async {
+    if (_localizando) return;
+    final estado = await widget.permiso();
+    if (!mounted) return;
+    if (estado == 'whileInUse' || estado == 'always') return _localizar(pedir: false);
+    if (estado == 'deniedForever' || estado == 'unableToDetermine') {
+      setState(() => _sinUbicacion = true);
+      return;
+    }
+    if (!kIsWeb) {
+      final seguir = await explicarPermiso(
+        context,
+        icono: LucideIcons.mapPin,
+        titulo: 'Para llevarte a donde estás',
+        texto: 'Basta con saber más o menos dónde estás. Ahora tu móvil te lo preguntará.',
+      );
+      if (!seguir || !mounted) return;
+    }
+    await _localizar(pedir: true);
+  }
+
+  Future<void> _localizar({required bool pedir}) async {
+    setState(() => _localizando = true);
     final moves = ++_moves;
     LatLng? point;
     try {
-      // Si nadie contesta al aviso del navegador, el botón no se queda girando.
-      point = await widget.locate(ask: true).timeout(const Duration(seconds: 20), onTimeout: () => null);
+      // Si nadie contesta al aviso, el botón no se queda esperando.
+      point = await widget.locate(ask: pedir).timeout(const Duration(seconds: 20), onTimeout: () => null);
     } finally {
-      if (mounted) setState(() => _locating = false);
+      if (mounted) setState(() => _localizando = false);
     }
     if (!mounted) return;
     if (point == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('No se puede saber dónde estás. Busca tu pueblo o tu barrio por el nombre.')),
-      );
+      setState(() => _sinUbicacion = true);
       return;
     }
+    setState(() => _sinUbicacion = false);
+    mostrarNotificacion(context, 'Te mostramos dónde estás.');
     if (moves == _moves) _flyTo(point, 15);
   }
 
-  void _scheduleReload() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 320), reload);
-  }
-
-  /// Vuela la cámara: se aleja un poco a mitad de camino si el salto es largo,
-  /// como quien levanta la vista antes de volver a mirar de cerca.
+  /// Vuela la cámara; con movimiento reducido salta sin animar.
   void _flyTo(LatLng to, double zoom) {
     if (!_ready) return;
     final from = _map.camera.center;
@@ -220,7 +278,7 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     }
     final distanceKm = const Distance().as(LengthUnit.Kilometer, from, to);
     final dip = math.min(3.0, math.log(1 + distanceKm) / 2);
-    final curve = CurvedAnimation(parent: _flight, curve: Curves.easeInOutCubic);
+    final curve = CurvedAnimation(parent: _flight, curve: curvaVdl);
     if (_flightStep != null) _flight.removeListener(_flightStep!);
     _flightStep = () {
       final t = curve.value;
@@ -234,46 +292,37 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
       ..forward(from: 0).whenComplete(_scheduleReload);
   }
 
-  /// En móvil, abre la hoja lo justo para que se vea la acción principal. En
-  /// los dos casos la lista vuelve arriba, donde aparece lo elegido.
-  void _raiseSheet() {
-    for (final scroll in [_panelScroll, _sheetScroll]) {
-      if (scroll != null && scroll.hasClients && scroll.offset > 0) {
-        scroll.animateTo(0, duration: Motion.of(context, Motion.settle), curve: Motion.emphasized);
-      }
-    }
-    if (!_sheet.isAttached || _sheet.size >= _sheetFocus) return;
-    _sheet.animateTo(_sheetFocus, duration: Motion.of(context, Motion.settle), curve: Motion.emphasized);
-  }
-
-  void _select(StoryPin story) {
+  void _elegirLugar(Lugar lugar) {
     _moves++;
     setState(() {
-      _selectedId = story.id;
-      _draft = null;
-      _placing = false;
+      _lugarId = lugar.id;
+      _pin = null;
+      _lista = false;
+      _colocando = false;
     });
-    _raiseSheet();
-    final zoom = math.max(_map.camera.zoom, 15.5);
-    var target = story.point;
-    final size = MediaQuery.sizeOf(context);
-    if (size.width < 900) {
-      // La hoja tapa la mitad de abajo: el centro baja para que la farola
-      // quede en el hueco visible de arriba.
+    final zoom = math.max(_map.camera.zoom, 15.0);
+    var target = lugar.punto;
+    if (tamano(context) != Vdl.amplio) {
+      // La hoja tapa el pie: el centro baja para que la placa quede arriba.
       final projected = _map.camera.projectAtZoom(target, zoom);
-      target = _map.camera.unprojectAtZoom(projected.translate(0, size.height * 0.28), zoom);
+      target = _map.camera.unprojectAtZoom(projected.translate(0, MediaQuery.sizeOf(context).height * 0.15), zoom);
     }
     _flyTo(target, zoom);
   }
 
-  void _drop(LatLng point) {
+  void _tocarMapa(LatLng point) {
     _moves++;
+    if (_lugarId != null || _lista) {
+      setState(() {
+        _lugarId = null;
+        _lista = false;
+      });
+      return;
+    }
     setState(() {
-      _draft = point;
-      _placing = false;
-      _selectedId = null;
+      _pin = point;
+      _colocando = false;
     });
-    _raiseSheet();
   }
 
   void _zoom(double delta) {
@@ -282,519 +331,528 @@ class MapPageState extends State<MapPage> with TickerProviderStateMixin {
     _flyTo(camera.center, (camera.zoom + delta).clamp(3.0, 18.0));
   }
 
-  void _open(StoryPin story) {
-    openStory(context, story);
+  void _contarAqui() {
+    final pin = _pin;
+    if (pin == null) return;
+    widget.onLeaveStory(pin);
   }
+
+  void _cancelarPin() => setState(() => _pin = null);
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final wide = size.width >= 900;
-    final visible = _visible;
-    final panel = _Panel(
-      visible: visible,
-      total: _stories.length,
-      selected: _selected,
-      draft: _draft,
-      placing: _placing,
-      loading: _loading,
-      error: _error,
-      onSelect: _select,
-      onOpen: _open,
-      onWrite: (point, [placeName]) => widget.onLeaveStory(point, placeName),
-      onClearDraft: () => setState(() => _draft = null),
-      onClearSelection: () => setState(() => _selectedId = null),
-      onRetry: reload,
-      searching: _query.text.trim().isNotEmpty,
-    );
+    if (_inicio == null) return const Center(child: Cargando(texto: 'Cargando el mapa…', bloques: 0));
+    return tamano(context) == Vdl.amplio ? _amplio(context) : _compacto(context);
+  }
 
+  // ---- Móvil y tableta: mapa a pantalla completa con cabecera y hoja ----
+
+  Widget _compacto(BuildContext context) {
+    final c = VdlColors.of(context);
     return Stack(
       children: [
-        Positioned.fill(child: _canvas(visible)),
+        Positioned.fill(child: _lienzo()),
+        if (_cargando && _stories.isEmpty) const Center(child: _Cartel('Cargando el mapa…')),
         Positioned(
-          right: 16,
+          left: 0,
+          right: 0,
           top: 0,
-          bottom: wide ? dockClearance : size.height * 0.4,
-          child: SafeArea(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _PlaceToggle(active: _placing, onTap: () => setState(() => _placing = !_placing)),
-                const SizedBox(height: 10),
-                GlassIconButton(icon: LucideIcons.plus, tooltip: 'Acercar', onPressed: () => _zoom(1)),
-                const SizedBox(height: 8),
-                GlassIconButton(icon: LucideIcons.minus, tooltip: 'Alejar', onPressed: () => _zoom(-1)),
-                const SizedBox(height: 8),
-                GlassIconButton(
-                  icon: _locating ? LucideIcons.loaderCircle : LucideIcons.locateFixed,
-                  tooltip: 'Ir a donde estoy',
-                  onPressed: _locating ? null : _goToUser,
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (_placing)
-          Positioned(
-            left: 0,
-            right: 0,
-            top: wide ? null : 150,
-            bottom: wide ? dockClearance + 12 : null,
-            child: Center(
-              child: Glass(
-                radius: 999,
-                tint: Palette.glassStrong,
-                padding: const EdgeInsets.fromLTRB(20, 10, 8, 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(LucideIcons.pointer, size: 18, color: Palette.lamp),
-                    const SizedBox(width: 10),
-                    Text('Toca el mapa donde pasó la historia', style: text(size: 14.5, weight: FontWeight.w600)),
-                    const SizedBox(width: 6),
-                    TextButton(onPressed: () => setState(() => _placing = false), child: const Text('Cancelar')),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        Positioned(
-          left: 16,
-          bottom: wide ? 22 : null,
-          top: wide ? null : 0,
-          child: IgnorePointer(
-            child: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.only(top: wide ? 0 : 128),
-                child: Text(
-                  '© colaboradores de OpenStreetMap',
-                  style: text(size: 11, color: Palette.haze.withValues(alpha: 0.8)),
-                ),
-              ),
-            ),
-          ),
-        ),
-        if (wide)
-          Positioned(
-            left: 16,
-            top: 150,
-            bottom: dockClearance,
-            width: 400,
-            child: Glass(
-              radius: 26,
-              tint: Palette.glassStrong.withValues(alpha: 0.55),
-              child: PrimaryScrollController(controller: _panelScroll, child: panel),
-            ),
-          )
-        else
-          _MobileSheet(controller: _sheet, onScroll: (scroll) => _sheetScroll = scroll, child: panel),
-        // Encima del panel: las sugerencias de lugares caen sobre él.
-        Positioned(
-          left: 16,
-          right: 16,
-          top: 0,
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Align(
-                alignment: wide ? Alignment.topLeft : Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: wide ? 400 : 640),
-                  child: _SearchBar(
-                    controller: _query,
-                    places: _places,
-                    searchingPlaces: _searchingPlaces,
-                    onPlace: _goToPlace,
-                    onSubmitted: () {
-                      if (_places.isNotEmpty) _goToPlace(_places.first);
-                    },
-                    categories: ({for (final s in _stories) s.category}.toList()..sort()),
-                    category: _category,
-                    onChanged: () {
-                      setState(() {});
-                      _searchPlaces(_query.text);
-                    },
-                    onCategory: (value) => setState(() => _category = value),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _canvas(List<StoryPin> visible) {
-    final selected = _selected;
-    return FlutterMap(
-      mapController: _map,
-      options: MapOptions(
-        initialCenter: _home,
-        initialZoom: 13,
-        minZoom: 3,
-        maxZoom: 18.5,
-        backgroundColor: Palette.deep,
-        onMapReady: () {
-          _ready = true;
-          reload();
-          _startNearUser();
-        },
-        onTap: (_, point) {
-          if (_placing || _selectedId == null) {
-            _drop(point);
-          } else {
-            setState(() => _selectedId = null);
-          }
-        },
-        onLongPress: (_, point) => _drop(point),
-        onMapEvent: (event) {
-          if (event.source != MapEventSource.mapController && event.source != MapEventSource.nonRotatedSizeChange) {
-            _moves++;
-            _scheduleReload();
-          }
-        },
-      ),
-      children: [
-        teselasVdl(context),
-        MarkerLayer(
-          markers: [
-            for (final story in onePinPerPlace(visible))
-              if (story.placeId != selected?.placeId)
-                Marker(
-                  point: story.point,
-                  width: 44,
-                  height: 44,
-                  child: LampPin(label: story.title, selected: false, onTap: () => _select(story)),
-                ),
-            if (selected != null)
-              Marker(
-                point: selected.point,
-                width: 96,
-                height: 96,
-                child: LampPin(label: selected.title, selected: true, onTap: () => _open(selected)),
-              ),
-            if (_draft != null)
-              Marker(
-                point: _draft!,
-                width: 60,
-                height: 76,
-                alignment: Alignment.topCenter,
-                child: DraftPin(key: ValueKey(_draft)),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// Pin de una historia: una farola. La elegida late con anillos de sonido.
-class LampPin extends StatefulWidget {
-  const LampPin({super.key, required this.label, required this.selected, required this.onTap});
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  State<LampPin> createState() => _LampPinState();
-}
-
-class _LampPinState extends State<LampPin> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1800),
-  );
-  var _hover = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _sync();
-  }
-
-  @override
-  void didUpdateWidget(covariant LampPin old) {
-    super.didUpdateWidget(old);
-    _sync();
-  }
-
-  void _sync() {
-    final run = widget.selected && !MediaQuery.disableAnimationsOf(context);
-    if (run && !_pulse.isAnimating) _pulse.repeat();
-    if (!run) _pulse.stop();
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: widget.label,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedBuilder(
-            animation: _pulse,
-            builder: (context, _) => CustomPaint(
-              painter: _LampPinPainter(phase: _pulse.value, selected: widget.selected, hover: _hover),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LampPinPainter extends CustomPainter {
-  _LampPinPainter({required this.phase, required this.selected, required this.hover});
-
-  final double phase;
-  final bool selected;
-  final bool hover;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = size.center(Offset.zero);
-    final core = selected ? 9.0 : (hover ? 7.5 : 6.0);
-    if (selected) {
-      for (var i = 0; i < 2; i++) {
-        final t = (phase + i / 2) % 1.0;
-        canvas.drawCircle(
-          c,
-          core + t * size.shortestSide * 0.42,
-          Paint()
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.6
-            ..color = Palette.lamp.withValues(alpha: (1 - t) * 0.7),
-        );
-      }
-    }
-    final halo = core * (selected ? 3.2 : 2.6);
-    canvas.drawCircle(
-      c,
-      halo,
-      Paint()
-        ..shader = RadialGradient(colors: [Palette.lamp.withValues(alpha: 0.55), Palette.ember.withValues(alpha: 0)])
-            .createShader(Rect.fromCircle(center: c, radius: halo)),
-    );
-    canvas.drawCircle(c, core, Paint()..color = Palette.lamp);
-    canvas.drawCircle(c, core * 0.45, Paint()..color = const Color(0xFFFFF3DE));
-  }
-
-  @override
-  bool shouldRepaint(covariant _LampPinPainter old) =>
-      old.phase != phase || old.selected != selected || old.hover != hover;
-}
-
-/// Marca provisional: cae y rebota sobre el sitio tocado.
-class DraftPin extends StatelessWidget {
-  const DraftPin({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final pin = Column(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: const LinearGradient(colors: [Palette.dusk, Palette.ember]),
-            border: Border.all(color: Palette.bone, width: 2.5),
-            boxShadow: [BoxShadow(color: Palette.dusk.withValues(alpha: 0.6), blurRadius: 18)],
-          ),
-          child: const Icon(LucideIcons.mic, size: 18, color: Palette.deep),
-        ),
-        Container(width: 2.5, height: 26, color: Palette.bone),
-        Container(
-          width: 8,
-          height: 3,
-          decoration: BoxDecoration(color: Palette.deep.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(4)),
-        ),
-      ],
-    );
-    return pin;
-  }
-}
-
-class _PlaceToggle extends StatelessWidget {
-  const _PlaceToggle({required this.active, required this.onTap});
-
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: active ? 'Dejar de marcar' : 'Marcar un sitio para contar su historia',
-      child: Pressable(
-        onTap: onTap,
-        semanticLabel: 'Marcar un sitio',
-        child: AnimatedContainer(
-          duration: Motion.of(context, Motion.settle),
-          curve: Motion.emphasized,
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: active ? null : Palette.lampGlow,
-            color: active ? Palette.bone : null,
-            boxShadow: [BoxShadow(color: Palette.lamp.withValues(alpha: 0.45), blurRadius: 24)],
-          ),
-          child: Icon(active ? LucideIcons.x : LucideIcons.mapPinPlus, color: Palette.deep, size: 24),
-        ),
-      ),
-    );
-  }
-}
-
-class _SearchBar extends StatelessWidget {
-  const _SearchBar({
-    required this.controller,
-    required this.places,
-    required this.searchingPlaces,
-    required this.onPlace,
-    required this.onSubmitted,
-    required this.categories,
-    required this.category,
-    required this.onChanged,
-    required this.onCategory,
-  });
-
-  final TextEditingController controller;
-  final List<PlaceHit> places;
-  final bool searchingPlaces;
-  final ValueChanged<PlaceHit> onPlace;
-  final VoidCallback onSubmitted;
-  final List<String> categories;
-  final String? category;
-  final VoidCallback onChanged;
-  final ValueChanged<String?> onCategory;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Glass(
-          radius: 999,
-          tint: Palette.glassStrong.withValues(alpha: 0.6),
-          padding: const EdgeInsets.symmetric(horizontal: 18),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(LucideIcons.search, size: 20, color: Palette.haze),
-              const SizedBox(width: 10),
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  onChanged: (_) => onChanged(),
-                  onSubmitted: (_) => onSubmitted(),
-                  textInputAction: TextInputAction.search,
-                  style: text(size: 15.5),
-                  decoration: const InputDecoration(
-                    hintText: 'Busca una ciudad, un sitio, una persona',
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 16),
+              Container(
+                decoration: BoxDecoration(
+                  color: c.cal,
+                  border: Border(bottom: BorderSide(color: c.anil, width: 2)),
+                ),
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(child: _buscador()),
+                              const SizedBox(width: 8),
+                              _BotonAqui(localizando: _localizando, onPressed: _aqui),
+                            ],
+                          ),
+                        ),
+                        ..._avisos(context),
+                      ],
+                    ),
                   ),
                 ),
               ),
-              if (controller.text.isNotEmpty)
-                IconButton(
-                  tooltip: 'Borrar la búsqueda',
-                  onPressed: () {
-                    controller.clear();
-                    onChanged();
-                  },
-                  icon: const Icon(LucideIcons.x, size: 18, color: Palette.haze),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 12, 16, 0),
+                  child: _Zoom(onZoom: _zoom),
                 ),
+              ),
             ],
           ),
         ),
-        if (places.isNotEmpty || (searchingPlaces && controller.text.trim().length >= 3)) ...[
-          const SizedBox(height: 8),
-          Glass(
-            radius: 22,
-            tint: Palette.glassStrong.withValues(alpha: 0.94),
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 6, 18, 4),
-                  child: Text(
-                    searchingPlaces && places.isEmpty ? 'Buscando lugares…' : 'Ir a un lugar',
-                    style: text(size: 12.5, weight: FontWeight.w600, color: Palette.haze),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Align(alignment: Alignment.centerRight, child: _Atribucion()),
+              _hoja(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _hoja(BuildContext context) {
+    final c = VdlColors.of(context);
+    final lugar = _lugar;
+    final alto = MediaQuery.sizeOf(context).height;
+    Widget contenido;
+    if (_lista) {
+      final historias = lugar?.historias ?? _stories;
+      contenido = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text.rich(
+                    TextSpan(
+                      text: '${lugar?.nombre ?? 'En esta vista'} ',
+                      children: [TextSpan(text: '· ${historias.length}', style: registro.copyWith(fontSize: 19))],
+                    ),
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                for (final hit in places)
-                  Pressable(
-                    onTap: () => onPlace(hit),
-                    lift: false,
-                    semanticLabel: 'Ir a ${hit.label}',
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-                      child: ExcludeSemantics(
-                        child: Row(
-                          children: [
-                            const Icon(LucideIcons.navigation, size: 16, color: Palette.lamp),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    hit.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: text(size: 15, weight: FontWeight.w600, height: 1.25),
-                                  ),
-                                  if (hit.context.isNotEmpty || hit.kindLabel.isNotEmpty)
-                                    Text(
-                                      [hit.kindLabel, hit.context].where((p) => p.isNotEmpty).join(' · '),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: text(size: 12.5, color: Palette.haze, height: 1.3),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+              ),
+              BotonCuadrado(
+                etiqueta: 'Cerrar la lista',
+                icono: LucideIcons.chevronDown,
+                onPressed: () => setState(() => _lista = false),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Flexible(
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.only(bottom: 8, top: 4, right: 4),
+              children: [
+                for (final h in historias)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: FichaHistoria.de(h, compacta: true, onTap: () => openStory(context, h)),
                   ),
               ],
             ),
           ),
         ],
-        if (categories.length > 1) ...[
-          const SizedBox(height: 10),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
+      );
+    } else if (lugar != null) {
+      contenido = _VistaPrevia(lugar: lugar, onLista: () => setState(() => _lista = true));
+    } else if (_pin != null) {
+      contenido = _SitioNuevo(onContar: _contarAqui, onCancelar: _cancelarPin);
+    } else if (_cargando) {
+      contenido = Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Text(
+          'Buscando historias en esta zona…',
+          style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w700, color: c.piedra),
+        ),
+      );
+    } else {
+      contenido = PlacaPulsable(
+        onPressed: () => setState(() => _lista = true),
+        hunde: false,
+        minimo: const Size(48, 56),
+        alineacion: Alignment.centerLeft,
+        child: Row(
+          children: [
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  text: 'En esta vista ',
+                  children: [TextSpan(text: '· ${_stories.length}', style: registro.copyWith(fontSize: 18))],
+                ),
+                style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Text(
+              'Ver la lista',
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontWeight: FontWeight.w800, color: c.anil),
+            ),
+            const SizedBox(width: 4),
+            Icon(LucideIcons.chevronUp, size: 22, color: c.anil),
+          ],
+        ),
+      );
+    }
+    return GestureDetector(
+      // Arrastrar la hoja hacia arriba abre la lista y hacia abajo la cierra;
+      // lo mismo se puede hacer con sus botones.
+      onVerticalDragEnd: (detalles) {
+        final v = detalles.primaryVelocity ?? 0;
+        if (v < -200 && !_lista) setState(() => _lista = true);
+        if (v > 200) {
+          setState(() {
+            if (_lista) {
+              _lista = false;
+            } else {
+              _lugarId = null;
+              _pin = null;
+            }
+          });
+        }
+      },
+      child: Container(
+        constraints: BoxConstraints(maxHeight: _lista ? alto * 0.78 : alto * 0.6),
+        decoration: BoxDecoration(
+          color: c.azulejo,
+          border: Border(top: BorderSide(color: c.anil, width: 2)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: AnimatedSize(
+            duration: duracion(context, const Duration(milliseconds: 200)),
+            curve: curvaVdl,
+            alignment: Alignment.bottomCenter,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 48,
+                    height: 5,
+                    margin: const EdgeInsets.only(top: 8),
+                    decoration: BoxDecoration(color: c.filete, borderRadius: BorderRadius.circular(3)),
+                  ),
+                ),
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    child: _lista ? contenido : SingleChildScrollView(child: contenido),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---- Escritorio: panel de 460 y mapa al lado ----
+
+  Widget _amplio(BuildContext context) {
+    final c = VdlColors.of(context);
+    final lugar = _lugar;
+    final letra = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          width: 460,
+          decoration: BoxDecoration(
+            color: c.cal,
+            border: Border(right: BorderSide(color: c.tinta, width: 2)),
+          ),
+          child: Semantics(
+            container: true,
+            label: 'Historias en esta vista',
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+              children: [
+                _buscador(),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: BotonPlaca(
+                    etiqueta: _localizando ? 'Buscando dónde estás…' : 'Ir a donde estoy',
+                    icono: LucideIcons.locateFixed,
+                    variante: VarianteBoton.secundario,
+                    tamano: TamanoBoton.medio,
+                    onPressed: _localizando ? null : _aqui,
+                  ),
+                ),
+                ..._avisos(context),
+                if (lugar != null)
+                  _Recuadro(
+                    color: c.anil,
+                    child: _VistaPrevia(lugar: lugar, compacta: true, onLista: () => setState(() => _lista = true)),
+                  )
+                else if (_pin != null)
+                  _Recuadro(
+                    color: c.ocre,
+                    child: _SitioNuevo(onContar: _contarAqui, onCancelar: _cancelarPin),
+                  ),
+                const SizedBox(height: 26),
+                Semantics(
+                  header: true,
+                  child: Text.rich(
+                    TextSpan(
+                      text: 'Historias en esta vista ',
+                      children: [TextSpan(text: '· ${_stories.length}', style: registro.copyWith(fontSize: 19))],
+                    ),
+                    style: letra.bodyMedium!.copyWith(fontSize: 20, fontWeight: FontWeight.w800),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (_cargando)
+                  const Cargando(texto: 'Buscando historias en esta zona…', bloques: 2)
+                else if (_sinConexion)
+                  const SizedBox.shrink()
+                else if (_stories.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 12),
+                    child: Vacio(
+                      titulo: 'Aquí todavía no hay historias',
+                      texto: 'Toca el mapa en el sitio donde pasó algo para contarlo.',
+                      icono: LucideIcons.mapPin,
+                    ),
+                  )
+                else
+                  for (final h in (_lista && lugar != null) ? lugar.historias : _stories)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: FichaHistoria.de(h, compacta: true, onTap: () => openStory(context, h)),
+                    ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(
+          child: Stack(
+            children: [
+              Positioned.fill(child: _lienzo()),
+              if (_cargando && _stories.isEmpty) const Center(child: _Cartel('Cargando el mapa…')),
+              Positioned(right: 24, top: 24, child: _Zoom(onZoom: _zoom)),
+              const Positioned(right: 0, bottom: 0, child: _Atribucion(larga: true)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _avisos(BuildContext context) {
+    final ios = Theme.of(context).platform == TargetPlatform.iOS;
+    final ruta = ios
+        ? 'Ajustes › Voces del Lugar › Ubicación'
+        : 'Ajustes › Aplicaciones › Voces del Lugar › Permisos › Ubicación';
+    return [
+      if (_colocando) ...[
+        const SizedBox(height: 10),
+        Aviso(
+          tono: TonoAviso.info,
+          titulo: 'Toca el mapa en el sitio exacto',
+          texto: 'Donde pasó lo que quieres contar. Puedes buscar antes el pueblo o el barrio.',
+          accion: EnlaceDiscreto(etiqueta: 'Cancelar', onPressed: () => setState(() => _colocando = false)),
+        ),
+      ],
+      if (_sinUbicacion) ...[
+        const SizedBox(height: 10),
+        if (kIsWeb)
+          const Aviso(
+            tono: TonoAviso.aviso,
+            titulo: 'No sabemos dónde estás',
+            texto: 'Tu navegador no ha dado permiso de ubicación. Busca el pueblo o barrio arriba.',
+          )
+        else
+          Aviso(
+            tono: TonoAviso.aviso,
+            titulo: 'No sabemos dónde estás',
+            texto: 'Busca el pueblo o barrio arriba, o da permiso en $ruta.',
+            accion: BotonPlaca(
+              etiqueta: 'Abrir Ajustes',
+              icono: LucideIcons.settings,
+              variante: VarianteBoton.secundario,
+              tamano: TamanoBoton.medio,
+              onPressed: widget.abrirAjustes,
+            ),
+          ),
+      ],
+      if (_sinConexion) ...[const SizedBox(height: 10), AvisoSinConexion(onRetry: reload)],
+    ];
+  }
+
+  Widget _buscador() {
+    return _Buscador(
+      controller: _query,
+      lugares: _places,
+      buscando: _buscandoLugares,
+      onCambio: _searchPlaces,
+      onLugar: _goToPlace,
+    );
+  }
+
+  Widget _lienzo() {
+    final inicio = _inicio!;
+    final lugar = _lugar;
+    final escala = MediaQuery.textScalerOf(context);
+    final otros = _lugares.where((l) => l.id != lugar?.id);
+    Marker placa(Lugar l, bool elegida) {
+      final medida = PlacaLugar.medida(l.nombre, escala);
+      return Marker(
+        point: l.punto,
+        width: medida.width,
+        height: medida.height,
+        alignment: Alignment.topCenter,
+        child: PlacaLugar(
+          nombre: l.nombre,
+          recuento: l.historias.length,
+          elegida: elegida,
+          onTap: () => elegida ? setState(() => _lista = true) : _elegirLugar(l),
+        ),
+      );
+    }
+
+    return Semantics(
+      label: 'Mapa',
+      child: FlutterMap(
+        mapController: _map,
+        options: MapOptions(
+          initialCenter: inicio.centro,
+          initialZoom: inicio.zoom,
+          minZoom: 3,
+          maxZoom: 18.5,
+          backgroundColor: VdlColors.of(context).cal,
+          onMapReady: () {
+            _ready = true;
+            reload();
+            _startNearUser();
+          },
+          onTap: (_, point) => _tocarMapa(point),
+          onLongPress: (_, point) => setState(() {
+            _pin = point;
+            _lugarId = null;
+            _lista = false;
+          }),
+          onMapEvent: (event) {
+            if (event.source != MapEventSource.mapController && event.source != MapEventSource.nonRotatedSizeChange) {
+              _moves++;
+              _scheduleReload();
+            }
+          },
+        ),
+        children: [
+          if (widget.conTeselas) teselasVdl(context),
+          MarkerLayer(
+            markers: [
+              for (final l in otros) placa(l, false),
+              if (lugar != null) placa(lugar, true),
+              if (_pin != null)
+                Marker(
+                  point: _pin!,
+                  width: PinNuevo.medida.width,
+                  height: PinNuevo.medida.height,
+                  alignment: const Alignment(0, -0.37),
+                  child: const PinNuevo(),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Vista previa de un lugar elegido: su primera historia y, si hay más, el
+/// enlace a la lista del sitio.
+class _VistaPrevia extends StatelessWidget {
+  const _VistaPrevia({required this.lugar, required this.onLista, this.compacta = false});
+
+  final Lugar lugar;
+  final VoidCallback onLista;
+  final bool compacta;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    final letra = Theme.of(context).textTheme;
+    final h = lugar.historias.first;
+    final n = lugar.historias.length;
+    final datos = [
+      categoryLabel(h.category),
+      ?decadeLabel(h.decade),
+      contadaPor(h.narratorName, h.narratorRelation, deceased: h.narratorDeceased),
+    ].join(' · ');
+    final duracion = duracionCorta(h.audioSeconds);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 8,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(lugar.nombre, style: letra.titleLarge!.copyWith(color: c.anilHondo)),
+            ),
+            Text(recuentoHistorias(n), style: registro.copyWith(fontSize: 16, color: c.tinta)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: c.ficha,
+            border: Border.all(color: c.tinta, width: 1.5),
+            borderRadius: BorderRadius.circular(2),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(h.title, style: letra.titleMedium!.copyWith(fontSize: 19, height: 1.25)),
+              const SizedBox(height: 4),
+              Text(
+                datos,
+                style: registro.copyWith(fontSize: 16, fontWeight: FontWeight.w400, color: c.piedra),
+              ),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: BotonPlaca(
+                  etiqueta: h.hasAudio ? (duracion == null ? 'Escuchar' : 'Escuchar · $duracion') : 'Leer la historia',
+                  icono: h.hasAudio ? LucideIcons.play : LucideIcons.bookOpenText,
+                  expandir: !compacta,
+                  onPressed: () => openStory(context, h),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (n > 1) ...[
+          const SizedBox(height: 6),
+          PlacaPulsable(
+            onPressed: onLista,
+            hunde: false,
+            alineacion: Alignment.centerLeft,
             child: Row(
               children: [
-                for (final c in categories) ...[
-                  FilterPill(
-                    label: categoryLabel(c),
-                    selected: category == c,
-                    onTap: () => onCategory(category == c ? null : c),
+                Expanded(
+                  child: Text(
+                    'Ver las $n historias de este sitio',
+                    style: letra.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w800, color: c.anil),
                   ),
-                  const SizedBox(width: 8),
-                ],
+                ),
+                Icon(LucideIcons.chevronRight, size: 22, color: c.anil),
               ],
             ),
           ),
@@ -804,371 +862,313 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-/// Alturas de la hoja en móvil: plegada, a medias y con el foco abierto.
-const _sheetRest = 0.36;
-const _sheetFocus = 0.66;
+/// Al tocar un sitio vacío: ¿pasó algo aquí?
+class _SitioNuevo extends StatelessWidget {
+  const _SitioNuevo({required this.onContar, required this.onCancelar});
 
-class _MobileSheet extends StatelessWidget {
-  const _MobileSheet({required this.controller, required this.onScroll, required this.child});
+  final VoidCallback onContar;
+  final VoidCallback onCancelar;
 
-  final DraggableScrollableController controller;
-  final ValueChanged<ScrollController> onScroll;
+  @override
+  Widget build(BuildContext context) {
+    final letra = Theme.of(context).textTheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          header: true,
+          child: Text('Aquí todavía no hay historias', style: letra.titleLarge!.copyWith(fontSize: 22)),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '¿Pasó algo en este sitio que merezca recordarse?',
+          style: letra.bodyMedium!.copyWith(fontSize: 17, color: VdlColors.of(context).piedra),
+        ),
+        const SizedBox(height: 14),
+        BotonPlaca(
+          etiqueta: 'Contar la historia de este sitio',
+          icono: LucideIcons.mic,
+          expandir: true,
+          onPressed: onContar,
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: EnlaceDiscreto(etiqueta: 'Cancelar', onPressed: onCancelar),
+        ),
+      ],
+    );
+  }
+}
+
+class _Recuadro extends StatelessWidget {
+  const _Recuadro({required this.color, required this.child});
+
+  final Color color;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.sizeOf(context).height;
-    final min = ((dockClearance + 96) / height).clamp(0.12, 0.5);
-    return DraggableScrollableSheet(
-      controller: controller,
-      minChildSize: min,
-      initialChildSize: math.max(min, _sheetRest),
-      maxChildSize: 0.88,
-      snap: true,
-      snapSizes: [math.max(min, _sheetRest), _sheetFocus],
-      builder: (context, scroll) {
-        onScroll(scroll);
-        return Glass(
-          radius: 30,
-          tint: Palette.glassStrong.withValues(alpha: 0.7),
-          child: PrimaryScrollController(controller: scroll, child: child),
-        );
-      },
+    return Container(
+      margin: const EdgeInsets.only(top: 18),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: VdlColors.of(context).azulejo,
+        border: Border.all(color: color, width: 2),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: child,
     );
   }
 }
 
-class _Panel extends StatelessWidget {
-  const _Panel({
-    required this.visible,
-    required this.total,
-    required this.selected,
-    required this.draft,
-    required this.placing,
-    required this.loading,
-    required this.error,
-    required this.onSelect,
-    required this.onOpen,
-    required this.onWrite,
-    required this.onClearDraft,
-    required this.onClearSelection,
-    required this.onRetry,
-    required this.searching,
-  });
+/// «Aquí»: ir a donde está quien mira.
+class _BotonAqui extends StatelessWidget {
+  const _BotonAqui({required this.localizando, required this.onPressed});
 
-  final List<StoryPin> visible;
-  final int total;
-  final StoryPin? selected;
-  final LatLng? draft;
-  final bool placing;
-  final bool loading;
-  final String? error;
-  final ValueChanged<StoryPin> onSelect;
-  final ValueChanged<StoryPin> onOpen;
-  final void Function(LatLng point, [String? placeName]) onWrite;
-  final VoidCallback onClearDraft;
-  final VoidCallback onClearSelection;
-  final VoidCallback onRetry;
-  final bool searching;
+  final bool localizando;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final here = [
-      for (final s in visible)
-        if (selected != null && s.placeId == selected!.placeId && s.id != selected!.id) s,
-    ];
-    final others = [
-      for (final s in visible)
-        if (s.id != selected?.id && !here.contains(s)) s,
-    ];
-    final focus = draft != null
-        ? _DraftFocus(
-            key: const ValueKey('draft'),
-            point: draft!,
-            onWrite: () => onWrite(draft!),
-            onClear: onClearDraft,
-          )
-        : selected != null
-        ? _StoryFocus(
-            key: ValueKey(selected!.id),
-            story: selected!,
-            onOpen: () => onOpen(selected!),
-            onClose: onClearSelection,
-            onWriteHere: () => onWrite(selected!.point, selected!.placeName),
-          )
-        : null;
-    return CustomScrollView(
-      primary: true,
-      slivers: [
-        SliverToBoxAdapter(
-          child: Center(
-            child: Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 6),
-              width: 42,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Palette.haze.withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-          sliver: SliverToBoxAdapter(
-            child: AnimatedSize(
-              duration: Motion.of(context, Motion.settle),
-              curve: Motion.emphasized,
-              alignment: Alignment.topCenter,
-              child: AnimatedSwitcher(
-                duration: Motion.of(context, Motion.settle),
-                switchInCurve: Motion.out,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween(begin: const Offset(0, 0.06), end: Offset.zero).animate(animation),
-                    child: child,
-                  ),
-                ),
-                child:
-                    focus ??
-                    _Heading(key: const ValueKey('heading'), count: visible.length, total: total, loading: loading),
-              ),
-            ),
-          ),
-        ),
-        if (error != null)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            sliver: SliverToBoxAdapter(
-              child: Notice(message: error!, action: 'Reintentar', onAction: onRetry),
-            ),
-          ),
-        if (here.isNotEmpty) ...[
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
-            sliver: SliverToBoxAdapter(
-              child: Text(
-                here.length == 1
-                    ? 'Otra historia en este mismo sitio'
-                    : '${here.length} historias más en este mismo sitio',
-                style: text(size: 14, weight: FontWeight.w600, color: Palette.lamp),
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            sliver: SliverList.builder(
-              itemCount: here.length,
-              itemBuilder: (context, index) =>
-                  _Row(story: here[index], selected: false, onTap: () => onSelect(here[index])),
-            ),
-          ),
-        ],
-        if (focus != null && others.isNotEmpty)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
-            sliver: SliverToBoxAdapter(
-              child: Text('Más historias en esta vista', style: text(size: 14, color: Palette.haze)),
-            ),
-          ),
-        if (visible.isEmpty && !loading && error == null)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-            sliver: SliverToBoxAdapter(
-              child: Text(
-                searching
-                    ? 'Ninguna historia de esta vista coincide. Si buscas un pueblo o una ciudad, elígelo en la lista de arriba para ir allí.'
-                    : 'Aquí todavía no hay historias. Aleja el mapa o toca un sitio para contar la primera.',
-                style: text(size: 14.5, color: Palette.haze),
-              ),
-            ),
-          ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(10, 8, 10, dockClearance + 16),
-          sliver: SliverList.builder(
-            itemCount: others.length,
-            itemBuilder: (context, index) {
-              final story = others[index];
-              return _Row(story: story, selected: story.id == selected?.id, onTap: () => onSelect(story));
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Heading extends StatelessWidget {
-  const _Heading({super.key, required this.count, required this.total, required this.loading});
-
-  final int count;
-  final int total;
-  final bool loading;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          loading && total == 0
-              ? 'Buscando historias…'
-              : (count == 1 ? 'Una historia en esta vista' : '$count historias en esta vista'),
-          style: display(30),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Toca una luz para escucharla. Toca un sitio vacío, o mantén pulsado, para contar lo que pasó allí.',
-          style: text(size: 14, color: Palette.haze),
-        ),
-      ],
-    );
-  }
-}
-
-class _StoryFocus extends StatelessWidget {
-  const _StoryFocus({
-    super.key,
-    required this.story,
-    required this.onOpen,
-    required this.onClose,
-    required this.onWriteHere,
-  });
-
-  final StoryPin story;
-  final VoidCallback onOpen;
-  final VoidCallback onClose;
-  final VoidCallback onWriteHere;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(LucideIcons.mapPin, size: 15, color: Palette.lamp),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                story.placeName,
-                style: text(size: 14, weight: FontWeight.w600, color: Palette.lamp),
-              ),
-            ),
-            IconButton(
-              tooltip: 'Cerrar',
-              onPressed: onClose,
-              icon: const Icon(LucideIcons.x, size: 18, color: Palette.haze),
-            ),
-          ],
-        ),
-        Text(story.title, style: display(34)),
-        const SizedBox(height: 8),
-        Text(narratorLine(story), style: text(size: 14.5, color: Palette.haze)),
-        if (excerpt(story.body, max: 160).isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text(excerpt(story.body, max: 160), style: text(size: 15, color: Palette.bone.withValues(alpha: 0.85))),
-        ],
-        const SizedBox(height: 16),
-        VoicePrint(seed: story.id, height: 28, alive: story.mediaUrls.isNotEmpty, dim: story.mediaUrls.isEmpty),
-        const SizedBox(height: 18),
-        LampButton(
-          label: story.mediaUrls.isNotEmpty ? 'Escuchar la historia' : 'Leer la historia',
-          icon: story.mediaUrls.isNotEmpty ? LucideIcons.headphones : LucideIcons.bookOpenText,
-          onPressed: onOpen,
-          expand: true,
-        ),
-        const SizedBox(height: 6),
-        Center(
-          child: TextButton.icon(
-            onPressed: onWriteHere,
-            icon: const Icon(LucideIcons.mic, size: 17),
-            label: const Text('Contar otra historia de este sitio'),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DraftFocus extends StatelessWidget {
-  const _DraftFocus({super.key, required this.point, required this.onWrite, required this.onClear});
-
-  final LatLng point;
-  final VoidCallback onWrite;
-  final VoidCallback onClear;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('¿Qué pasó aquí?', style: display(36)),
-        const SizedBox(height: 6),
-        Text(coordinateLabel(point), style: text(size: 14, color: Palette.haze)),
-        const SizedBox(height: 6),
-        Text('Si no es el sitio exacto, toca otra vez el mapa.', style: text(size: 14, color: Palette.haze)),
-        const SizedBox(height: 18),
-        LampButton(label: 'Contar la historia de este sitio', icon: LucideIcons.mic, onPressed: onWrite, expand: true),
-        const SizedBox(height: 8),
-        Center(
-          child: TextButton(onPressed: onClear, child: const Text('Quitar la marca')),
-        ),
-      ],
-    );
-  }
-}
-
-class _Row extends StatelessWidget {
-  const _Row({required this.story, required this.selected, required this.onTap});
-
-  final StoryPin story;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      onTap: onTap,
-      lift: false,
-      semanticLabel: '${story.title}, ${story.placeName}',
-      child: AnimatedContainer(
-        duration: Motion.of(context, Motion.settle),
-        margin: const EdgeInsets.symmetric(vertical: 3),
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-        decoration: BoxDecoration(
-          color: selected ? Palette.lamp.withValues(alpha: 0.1) : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-        ),
+    final c = VdlColors.of(context);
+    return Tooltip(
+      message: 'Ir a donde estoy',
+      excludeFromSemantics: true,
+      child: PlacaPulsable(
+        onPressed: localizando ? null : onPressed,
+        etiqueta: localizando ? 'Buscando dónde estás' : 'Ir a donde estoy',
+        color: c.azulejo,
+        borde: c.anil,
+        sombra: BoxShadow(color: c.sombraBoton, offset: const Offset(2, 2)),
+        minimo: const Size(66, 54),
+        padding: const EdgeInsets.symmetric(horizontal: 6),
         child: ExcludeSemantics(
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                width: 54,
-                child: VoicePrint(seed: story.id, bars: 9, height: 34, dim: story.mediaUrls.isEmpty),
+              Icon(localizando ? LucideIcons.hourglass : LucideIcons.locateFixed, size: 22, color: c.anil),
+              Text(
+                'Aquí',
+                style: Theme.of(context).textTheme.bodySmall!
+                    .copyWith(fontSize: 15, height: 1.1, fontWeight: FontWeight.w800, color: c.anil),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(story.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: display(21, height: 1.1)),
-                    const SizedBox(height: 3),
-                    Text(
-                      story.placeName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text(size: 13, color: Palette.haze),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(LucideIcons.chevronRight, size: 18, color: Palette.haze),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Acercar y alejar con botones: el mapa no depende solo del gesto.
+class _Zoom extends StatelessWidget {
+  const _Zoom({required this.onZoom});
+
+  final ValueChanged<double> onZoom;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    Widget boton(String etiqueta, IconData icono, double delta) => Tooltip(
+      message: etiqueta,
+      excludeFromSemantics: true,
+      child: PlacaPulsable(
+        onPressed: () => onZoom(delta),
+        etiqueta: etiqueta,
+        radio: 0,
+        minimo: const Size(52, 52),
+        child: Icon(icono, size: 26, color: c.tinta),
+      ),
+    );
+    return Container(
+      decoration: BoxDecoration(
+        color: c.azulejo,
+        border: Border.all(color: c.tinta, width: 2),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          boton('Acercar', LucideIcons.plus, 1),
+          Container(width: 52, height: 1.5, color: c.filete),
+          boton('Alejar', LucideIcons.minus, -1),
+        ],
+      ),
+    );
+  }
+}
+
+class _Atribucion extends StatelessWidget {
+  const _Atribucion({this.larga = false});
+
+  final bool larga;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      color: c.azulejo,
+      child: Text(
+        larga ? '© colaboradores de OpenStreetMap' : '© OpenStreetMap',
+        style: TextStyle(fontFamily: 'AtkinsonHyperlegibleNext', fontSize: 13, color: c.piedra),
+      ),
+    );
+  }
+}
+
+class _Cartel extends StatelessWidget {
+  const _Cartel(this.texto);
+
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    return Semantics(
+      liveRegion: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+        decoration: BoxDecoration(
+          color: c.azulejo,
+          border: Border.all(color: c.tinta, width: 2),
+          borderRadius: BorderRadius.circular(2),
+        ),
+        child: Text(
+          texto,
+          style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+      ),
+    );
+  }
+}
+
+/// Buscador de pueblos, barrios y calles, con la lista de lugares debajo.
+class _Buscador extends StatelessWidget {
+  const _Buscador({
+    required this.controller,
+    required this.lugares,
+    required this.buscando,
+    required this.onCambio,
+    required this.onLugar,
+  });
+
+  final TextEditingController controller;
+  final List<PlaceHit> lugares;
+  final bool buscando;
+  final ValueChanged<String> onCambio;
+  final ValueChanged<PlaceHit> onLugar;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    final letra = Theme.of(context).textTheme;
+    final campo = Container(
+      constraints: const BoxConstraints(minHeight: 54),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: c.azulejo,
+        border: Border.all(color: c.tinta, width: 2),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Row(
+        children: [
+          Icon(LucideIcons.search, size: 22, color: c.tinta),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Semantics(
+              label: 'Buscar un pueblo, barrio o calle',
+              textField: true,
+              child: TextField(
+                controller: controller,
+                onChanged: onCambio,
+                onSubmitted: (_) {
+                  if (lugares.isNotEmpty) onLugar(lugares.first);
+                },
+                textInputAction: TextInputAction.search,
+                cursorColor: c.anilHondo,
+                style: letra.bodyMedium,
+                decoration: InputDecoration(
+                  isDense: true,
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  hintText: 'Busca un pueblo, barrio o calle',
+                  hintStyle: letra.bodyMedium!.copyWith(color: c.piedra),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (!buscando && lugares.isEmpty) return campo;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        campo,
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            color: c.azulejo,
+            border: Border.all(color: c.tinta, width: 2),
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [BoxShadow(color: c.sombra, offset: const Offset(3, 3))],
+          ),
+          child: Semantics(
+            container: true,
+            label: 'Lugares encontrados',
+            child: buscando
+                ? Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Text(
+                      'Buscando lugares…',
+                      style: letra.bodyMedium!.copyWith(fontWeight: FontWeight.w700, color: c.piedra),
+                    ),
+                  )
+                : Column(
+                    children: [
+                      for (final (i, hit) in lugares.indexed)
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: i == 0 ? c.anilVelo : null,
+                            border: i == 0 ? null : Border(top: BorderSide(color: c.filete, width: 1.5)),
+                          ),
+                          child: PlacaPulsable(
+                            onPressed: () => onLugar(hit),
+                            hunde: false,
+                            radio: 0,
+                            minimo: const Size(48, 60),
+                            alineacion: Alignment.centerLeft,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  hit.name,
+                                  style: letra.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w800),
+                                ),
+                                if (hit.context.isNotEmpty || hit.kindLabel.isNotEmpty)
+                                  Text(
+                                    [
+                                      if (hit.kindLabel.isNotEmpty) hit.kindLabel,
+                                      if (hit.context.isNotEmpty) hit.context,
+                                    ].join(' · '),
+                                    style: letra.bodySmall!.copyWith(color: c.piedra),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
+        ),
+      ],
     );
   }
 }

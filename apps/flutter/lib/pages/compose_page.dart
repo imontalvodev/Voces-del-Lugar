@@ -5,7 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
-import 'package:voces/pages/map_page.dart' show LampPin;
+import 'package:voces/ui/placa_mapa.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/audio.dart';
 import 'package:voces/ui/kit.dart';
@@ -584,9 +584,10 @@ class _MiniMap extends StatelessWidget {
                     markers: [
                       Marker(
                         point: point,
-                        width: 96,
-                        height: 96,
-                        child: LampPin(label: 'Sitio marcado', selected: true, onTap: () {}),
+                        width: 48,
+                        height: 70,
+                        alignment: const Alignment(0, -0.37),
+                        child: const PinNuevo(),
                       ),
                     ],
                   ),

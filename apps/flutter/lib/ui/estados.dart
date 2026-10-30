@@ -71,14 +71,15 @@ class Cargando extends StatelessWidget {
   }
 }
 
-/// Estado vacío: dice qué pasa y siempre ofrece algo que hacer.
+/// Estado vacío: dice qué pasa y siempre ofrece algo que hacer, con un
+/// botón o, si la acción es el propio mapa, diciéndolo en el texto.
 class Vacio extends StatelessWidget {
-  const Vacio({super.key, required this.titulo, required this.accion, this.texto, this.icono});
+  const Vacio({super.key, required this.titulo, this.accion, this.texto, this.icono});
 
   final String titulo;
   final String? texto;
   final IconData? icono;
-  final Widget accion;
+  final Widget? accion;
 
   @override
   Widget build(BuildContext context) {
@@ -112,8 +113,7 @@ class Vacio extends StatelessWidget {
                   ),
                 ),
               ),
-            const SizedBox(height: 16),
-            accion,
+            if (accion != null) ...[const SizedBox(height: 16), accion!],
           ],
         ),
       ),
