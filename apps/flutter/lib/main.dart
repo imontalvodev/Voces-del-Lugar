@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:voces/api.dart';
+import 'package:voces/escuchar.dart';
 import 'package:voces/links.dart';
 import 'package:voces/navegacion.dart';
 import 'package:voces/pages/bienvenida_page.dart';
@@ -14,6 +15,7 @@ Future<void> main() async {
   usePathUrlStrategy(); // /historia/<id> en vez de /#/historia/<id>
   WidgetsFlutterBinding.ensureInitialized();
   final letra = await PreferenciaLetra.cargar();
+  await iniciarEscucha();
   runApp(VocesApp(letra: letra));
 }
 

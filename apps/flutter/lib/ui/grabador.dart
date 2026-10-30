@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:audio_session/audio_session.dart';
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'package:voces/grabacion_fondo.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
 import 'package:voces/ui/placa.dart';
@@ -65,11 +67,49 @@ class _GrabadorState extends State<Grabador> {
   late EstadoGrabador _estado = widget.grabacion == null ? EstadoGrabador.lista : EstadoGrabador.terminada;
   bool _guardando = false;
   String? _error;
+  String? _motivoPausa;
+  StreamSubscription<AudioInterruptionEvent>? _interrupciones;
+  final _aviso = AvisoGrabacion.instancia;
+
+  @override
+  void initState() {
+    super.initState();
+    _aviso.accion.addListener(_desdeNotificacion);
+    _escucharInterrupciones();
+  }
+
+  /// Si entra una llamada, se pausa sola y lo dice: lo grabado queda a salvo.
+  Future<void> _escucharInterrupciones() async {
+    if (kIsWeb) return;
+    try {
+      final sesion = await AudioSession.instance;
+      _interrupciones = sesion.interruptionEventStream.listen((evento) {
+        if (evento.begin && _estado == EstadoGrabador.grabando) {
+          _pausar(motivo: 'Se ha pausado por una llamada. Lo grabado está a salvo: pulsa «Seguir» cuando quieras.');
+        }
+      });
+    } catch (_) {}
+  }
+
+  /// Pausar, Seguir o Terminar desde la notificación fija.
+  void _desdeNotificacion() {
+    switch (_aviso.accion.value) {
+      case 'pausar' when _estado == EstadoGrabador.grabando:
+        _pausar();
+      case 'seguir' when _estado == EstadoGrabador.pausa:
+        _seguir();
+      case 'terminar' when _estado == EstadoGrabador.grabando || _estado == EstadoGrabador.pausa:
+        _terminar();
+    }
+  }
 
   @override
   void dispose() {
+    _aviso.accion.removeListener(_desdeNotificacion);
+    _interrupciones?.cancel();
     _nivel?.cancel();
     _reloj?.cancel();
+    if (_estado == EstadoGrabador.grabando || _estado == EstadoGrabador.pausa) _aviso.quitar();
     _recorder.dispose();
     super.dispose();
   }
@@ -112,27 +152,41 @@ class _GrabadorState extends State<Grabador> {
       _segundos = 0;
       _niveles.clear();
       _contar();
+      unawaited(_aviso.mostrar(llevado: Duration.zero, pausada: false));
       if (mounted) setState(() => _estado = EstadoGrabador.grabando);
     } catch (_) {
       if (mounted) setState(() => _error = 'No se ha podido empezar a grabar. Prueba a escribirla o a subir un audio.');
     }
   }
 
-  Future<void> _pausar() async {
+  Future<void> _pausar({String? motivo}) async {
     _reloj?.cancel();
     await _recorder.pause();
-    if (mounted) setState(() => _estado = EstadoGrabador.pausa);
+    unawaited(_aviso.mostrar(llevado: Duration(seconds: _segundos), pausada: true));
+    if (mounted) {
+      setState(() {
+        _estado = EstadoGrabador.pausa;
+        _motivoPausa = motivo;
+      });
+    }
   }
 
   Future<void> _seguir() async {
     await _recorder.resume();
     _contar();
-    if (mounted) setState(() => _estado = EstadoGrabador.grabando);
+    unawaited(_aviso.mostrar(llevado: Duration(seconds: _segundos), pausada: false));
+    if (mounted) {
+      setState(() {
+        _estado = EstadoGrabador.grabando;
+        _motivoPausa = null;
+      });
+    }
   }
 
   Future<void> _terminar() async {
     _reloj?.cancel();
     await _nivel?.cancel();
+    unawaited(_aviso.quitar());
     setState(() => _guardando = true);
     try {
       final ruta = await _recorder.stop();
@@ -177,6 +231,7 @@ class _GrabadorState extends State<Grabador> {
       niveles: _niveles,
       guardando: _guardando,
       error: _error,
+      motivoPausa: _motivoPausa,
       grabacion: widget.grabacion,
       onEmpezar: _empezar,
       onPausar: _pausar,
@@ -366,6 +421,15 @@ class GrabadorVista extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ],
+            if (!kIsWeb && (grabando || estado == EstadoGrabador.pausa)) ...[
+              const SizedBox(height: 10),
+              Text(
+                Theme.of(context).platform == TargetPlatform.iOS
+                    ? 'Puedes bloquear el móvil: la grabación sigue y lo verás en la pantalla de bloqueo.'
+                    : 'Puedes bloquear el móvil: la grabación sigue y verás un aviso en la barra de notificaciones.',
+                style: letra.bodySmall!.copyWith(color: c.piedra),
               ),
             ],
             if (estado == EstadoGrabador.terminada && grabacion != null) ...[

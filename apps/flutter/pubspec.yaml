@@ -48,7 +48,7 @@ dependencies:
   http_parser: ^4.1.2
   lucide_icons_flutter: ^3.1.20
   geolocator: ^14.0.1
-  permission_handler: ^13.0.2
+  permission_handler: ^11.4.0
   share_plus: ^13.3.1
   audio_service: ^0.18.19
   audio_session: ^0.2.4

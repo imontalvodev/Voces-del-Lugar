@@ -311,7 +311,12 @@ class _Ficha extends StatelessWidget {
                   ),
                 if (story.hasAudio) ...[
                   const SizedBox(height: 20),
-                  Reproductor(url: story.mediaUrls.first, titulo: story.title, empezar: escuchar),
+                  Reproductor(
+                    url: story.mediaUrls.first,
+                    titulo: story.title,
+                    narrador: contadaPor(story.narratorName, story.narratorRelation, deceased: story.narratorDeceased),
+                    empezar: escuchar,
+                  ),
                 ],
                 if (parrafos.isNotEmpty) ...[
                   const SizedBox(height: 20),

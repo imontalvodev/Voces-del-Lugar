@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
 import 'package:voces/ui/campos.dart';
+import 'package:voces/escuchar.dart';
 import 'package:voces/ui/placa.dart';
 
 String _tiempo(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
@@ -18,10 +19,13 @@ String etiquetaVelocidad(double v) => '${v.toString().replaceAll(RegExp(r'\.0$')
 /// Reproductor de una grabación: botón de 64, barra con zona de toque de 48,
 /// saltos de ±10 s y velocidad.
 class Reproductor extends StatefulWidget {
-  const Reproductor({super.key, required this.url, required this.titulo, this.empezar = false});
+  const Reproductor({super.key, required this.url, required this.titulo, this.narrador, this.empezar = false});
 
   final String url;
   final String titulo;
+
+  /// Quién la cuenta, para la pantalla de bloqueo.
+  final String? narrador;
 
   /// Empieza a sonar nada más abrirse (al llegar con «Escuchar»).
   final bool empezar;
@@ -69,6 +73,7 @@ class _ReproductorState extends State<Reproductor> {
     for (final s in _subs) {
       s.cancel();
     }
+    escucha?.desconectar(_player);
     _player.dispose();
     super.dispose();
   }
@@ -95,6 +100,7 @@ class _ReproductorState extends State<Reproductor> {
     }
     if (!await _preparar()) return;
     if (_terminado) await _player.seek(Duration.zero);
+    escucha?.conectar(_player, titulo: widget.titulo, narrador: widget.narrador);
     unawaited(_player.play());
   }
 

@@ -1,5 +1,7 @@
 package dev.vocesdellugar.voces
 
-import io.flutter.embedding.android.FlutterActivity
+import com.ryanheise.audioservice.AudioServiceActivity
 
-class MainActivity : FlutterActivity()
+// AudioServiceActivity: la misma app que FlutterActivity, con los controles
+// de la pantalla de bloqueo y la notificación multimedia.
+class MainActivity : AudioServiceActivity()
