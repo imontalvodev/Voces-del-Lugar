@@ -45,13 +45,11 @@ class Marca extends StatelessWidget {
                 decoration: BoxDecoration(color: c.ocre, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
-              Text(
-                'Voces del Lugar',
-                style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                  fontSize: pequena ? 16 : 18,
-                  height: 1.1,
-                  fontWeight: FontWeight.w800,
-                  color: c.anil,
+              Flexible(
+                child: Text(
+                  'Voces del Lugar',
+                  style: Theme.of(context).textTheme.bodyMedium!
+                      .copyWith(fontSize: pequena ? 16 : 18, height: 1.1, fontWeight: FontWeight.w800, color: c.anil),
                 ),
               ),
             ],
@@ -91,10 +89,7 @@ class TituloSeccion extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      header: true,
-      child: Text(texto, style: Theme.of(context).textTheme.titleLarge),
-    );
+    return Semantics(header: true, child: Text(texto, style: Theme.of(context).textTheme.titleLarge));
   }
 }
 
@@ -163,6 +158,7 @@ class BarraAcciones extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
           child: Center(
+            heightFactor: 1,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 640),
               child: Row(

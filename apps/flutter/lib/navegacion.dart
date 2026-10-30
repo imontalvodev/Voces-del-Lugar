@@ -207,13 +207,7 @@ class _EnlaceSuperior extends StatelessWidget {
               fontWeight: activa ? FontWeight.w800 : FontWeight.w600,
             ),
           ),
-          if (activa)
-            Positioned(
-              left: -4,
-              right: -4,
-              bottom: -26,
-              child: Container(height: 5, color: c.anil),
-            ),
+          if (activa) Positioned(left: -4, right: -4, bottom: -26, child: Container(height: 5, color: c.anil)),
         ],
       ),
     );

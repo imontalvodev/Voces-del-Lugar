@@ -3,6 +3,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:voces/api.dart';
 import 'package:voces/links.dart';
 import 'package:voces/navegacion.dart';
+import 'package:voces/pages/bienvenida_page.dart';
 import 'package:voces/shell.dart';
 import 'package:voces/theme/letra.dart';
 import 'package:voces/theme/vdl_colors.dart';
@@ -32,10 +33,13 @@ class _VocesAppState extends State<VocesApp> {
   /// La sección de la dirección por la que se entra (en web, la barra).
   final _inicial = seccionDeRuta(WidgetsBinding.instance.platformDispatcher.defaultRouteName);
 
+  /// Primer arranque: antes de nada, la bienvenida con el tamaño de letra.
+  var _bienvenida = false;
+
   @override
   void initState() {
     super.initState();
-    _api.restore().whenComplete(() {
+    Future.wait([_api.restore(), bienvenidaVista().then((vista) => _bienvenida = !vista)]).whenComplete(() {
       if (mounted) setState(() => _ready = true);
     });
   }
@@ -52,7 +56,11 @@ class _VocesAppState extends State<VocesApp> {
         themeMode: ThemeMode.system,
         builder: (context, child) => EscalaLetra(preferencia: widget.letra, child: child!),
         onGenerateRoute: vocesRoute,
-        home: _ready ? AppShell(api: _api, inicial: _inicial) : const Scaffold(body: Center(child: Marca())),
+        home: !_ready
+            ? const Scaffold(body: Center(child: Marca()))
+            : _bienvenida
+            ? BienvenidaPage(letra: widget.letra, onEmpezar: () => setState(() => _bienvenida = false))
+            : AppShell(api: _api, inicial: _inicial),
       ),
     );
   }

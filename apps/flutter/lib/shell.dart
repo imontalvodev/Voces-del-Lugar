@@ -58,7 +58,9 @@ class _AppShellState extends State<AppShell> {
     _pendingPlace = null;
     final created = await Navigator.push<bool>(
       context,
-      MaterialPageRoute<bool>(builder: (_) => ComposePage(api: widget.api, point: point, placeName: placeName)),
+      MaterialPageRoute<bool>(
+        builder: (_) => ComposePage(api: widget.api, point: point, placeName: placeName),
+      ),
     );
     if (created == true) _mapKey.currentState?.reload();
   }
