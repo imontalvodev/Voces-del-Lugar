@@ -154,31 +154,36 @@ class Sello extends StatelessWidget {
   }
 }
 
-/// Borde de 2 px del sello, liso o discontinuo.
+/// Borde liso o discontinuo: el de los sellos, los bloques de carga y el
+/// estado vacío.
 class BordeSello extends CustomPainter {
-  BordeSello({required this.color, required this.discontinuo});
+  BordeSello({required this.color, required this.discontinuo, this.grosor = 2, this.radio = 3});
 
   final Color color;
   final bool discontinuo;
+  final double grosor;
+  final double radio;
 
   @override
   void paint(Canvas canvas, Size size) {
     final pincel = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    final caja = RRect.fromRectAndRadius((Offset.zero & size).deflate(1), const Radius.circular(3));
+      ..strokeWidth = grosor;
+    final caja = RRect.fromRectAndRadius((Offset.zero & size).deflate(grosor / 2), Radius.circular(radio));
     if (!discontinuo) {
       canvas.drawRRect(caja, pincel);
       return;
     }
+    final trazo = grosor * 2.5;
     for (final PathMetric tramo in (Path()..addRRect(caja)).computeMetrics()) {
-      for (var d = 0.0; d < tramo.length; d += 9) {
-        canvas.drawPath(tramo.extractPath(d, math.min(d + 5, tramo.length)), pincel);
+      for (var d = 0.0; d < tramo.length; d += trazo * 1.8) {
+        canvas.drawPath(tramo.extractPath(d, math.min(d + trazo, tramo.length)), pincel);
       }
     }
   }
 
   @override
-  bool shouldRepaint(BordeSello old) => old.color != color || old.discontinuo != discontinuo;
+  bool shouldRepaint(BordeSello old) =>
+      old.color != color || old.discontinuo != discontinuo || old.grosor != grosor || old.radio != radio;
 }
