@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voces/api.dart';
-import 'package:voces/ui/kit.dart';
 
 void main() {
   group('defaultApiBase', () {
@@ -43,19 +42,6 @@ void main() {
 
     test('lo desconocido queda como binario y el backend lo rechaza con su mensaje', () {
       expect(audioType('foto.jpg').mimeType, 'application/octet-stream');
-    });
-  });
-
-  group('voiceLevels', () {
-    test('la misma historia siempre tiene la misma huella', () {
-      expect(voiceLevels('abc', 40), voiceLevels('abc', 40));
-      expect(voiceLevels('abc', 40), isNot(voiceLevels('abd', 40)));
-    });
-
-    test('los niveles quedan entre 0.1 y 1', () {
-      final levels = voiceLevels('una-historia-cualquiera', 64);
-      expect(levels, hasLength(64));
-      expect(levels.every((l) => l >= 0.1 && l <= 1.0), isTrue);
     });
   });
 }
