@@ -8,6 +8,7 @@ import 'package:voces/pages/account_page.dart';
 import 'package:voces/pages/contar_page.dart';
 import 'package:voces/pages/home_page.dart';
 import 'package:voces/pages/map_page.dart';
+import 'package:voces/pages/revisar_page.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key, required this.api, this.inicial = Seccion.inicio});
@@ -122,7 +123,7 @@ class _AppShellState extends State<AppShell> {
             ),
           ),
           Seccion.cuenta: pila(Seccion.cuenta, cuenta),
-          Seccion.revisar: pila(Seccion.revisar, cuenta),
+          Seccion.revisar: pila(Seccion.revisar, RevisarPage(api: widget.api)),
         },
       ),
     );

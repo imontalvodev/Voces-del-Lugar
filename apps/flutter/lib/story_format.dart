@@ -107,3 +107,20 @@ String? duracionCorta(int? segundos) {
     ),
   };
 }
+
+const _meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+/// «14 oct 2026».
+String fechaCorta(DateTime fecha) {
+  final local = fecha.toLocal();
+  return '${local.day} ${_meses[local.month - 1]} ${local.year}';
+}
+
+/// El rol en una palabra para la tabla de la cuenta.
+String rolCorto(String role) {
+  return switch (role) {
+    'admin' => 'Administración',
+    'curator' => 'Moderación',
+    _ => 'Colaboración',
+  };
+}

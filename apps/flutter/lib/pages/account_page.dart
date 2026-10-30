@@ -1,12 +1,24 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
-import 'package:voces/pages/story_page.dart' show confirmReject;
+import 'package:voces/links.dart';
+import 'package:voces/pages/entrar_page.dart';
+import 'package:voces/pages/revisar_page.dart';
+import 'package:voces/pages/story_page.dart' show editStory;
 import 'package:voces/story_format.dart';
-import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/story_card.dart';
-import 'package:voces/ui/tokens.dart';
+import 'package:voces/theme/letra.dart';
+import 'package:voces/theme/vdl_colors.dart';
+import 'package:voces/theme/vdl_theme.dart';
+import 'package:voces/ui/avisos.dart';
+import 'package:voces/ui/estados.dart';
+import 'package:voces/ui/ficha.dart';
+import 'package:voces/ui/pagina.dart';
+import 'package:voces/ui/placa.dart';
+import 'package:voces/ui/sello.dart';
 
+/// Cuenta: entrar o crear cuenta y, con sesión, el rol, el ajuste de letra y
+/// «Lo que has dejado» con su estado.
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key, required this.api, required this.onChanged, required this.onLeaveStory});
 
@@ -19,358 +31,159 @@ class AccountPage extends StatefulWidget {
 }
 
 class AccountPageState extends State<AccountPage> {
-  final _email = TextEditingController();
-  final _password = TextEditingController();
-  final _name = TextEditingController();
-  bool _registering = false;
-  bool _busy = false;
-  bool _hidden = true;
-  String? _error;
-  List<StoryPin> _mine = [];
-  List<StoryPin> _queue = [];
-  final Set<String> _deciding = {};
-  bool _loadingMine = false;
-  int _generation = 0;
+  List<StoryPin> _mias = [];
+  int _porRevisar = 0;
+  bool _cargando = true;
+  bool _sinConexion = false;
+  int _ticket = 0;
+  String? _cuentaVista;
 
   @override
   void initState() {
     super.initState();
-    widget.api.changes.addListener(reload);
+    widget.api.changes.addListener(_cambio);
     reload();
   }
 
   @override
   void dispose() {
-    widget.api.changes.removeListener(reload);
-    _email.dispose();
-    _password.dispose();
-    _name.dispose();
+    widget.api.changes.removeListener(_cambio);
     super.dispose();
   }
 
-  Future<void> reload() async {
+  void _cambio() {
     if (!mounted) return;
-    // Cada recarga invalida las anteriores: si la sesión cambia a medias, lo
-    // que llegue tarde de la cuenta anterior no se pinta.
-    final generation = ++_generation;
-    final account = widget.api.account;
-    if (account == null) {
+    // Si cambia la cuenta, lo de la anterior no se enseña ni un instante.
+    if (_cuentaVista != widget.api.account?.id) {
       setState(() {
-        _mine = [];
-        _queue = [];
-        _loadingMine = false;
+        _mias = [];
+        _porRevisar = 0;
+        _cargando = true;
       });
+    }
+    reload();
+  }
+
+  Future<void> reload() async {
+    final cuenta = widget.api.account;
+    if (!mounted) return;
+    final ticket = ++_ticket;
+    _cuentaVista = cuenta?.id;
+    if (cuenta == null) {
+      setState(() => _cargando = false);
       return;
     }
-    bool current() => mounted && generation == _generation && widget.api.account == account;
-    setState(() => _loadingMine = _mine.isEmpty);
-    String? error;
-    try {
-      final stories = await widget.api.mine();
-      if (current()) setState(() => _mine = stories);
-    } on ApiException catch (e) {
-      error = e.message;
-    } catch (_) {
-      error = 'No hay conexión con el archivo.';
-    }
-    if (account.canModerate && current()) {
-      try {
-        final queue = await widget.api.reviewQueue();
-        if (current()) setState(() => _queue = queue);
-      } on ApiException catch (e) {
-        error ??= e.message;
-      } catch (_) {
-        error ??= 'No hay conexión con el archivo.';
-      }
-    }
-    if (current()) {
-      setState(() {
-        _error = error;
-        _loadingMine = false;
-      });
-    }
-  }
-
-  Future<void> _submit() async {
-    if (_busy) return;
     setState(() {
-      _busy = true;
-      _error = null;
+      _cargando = _mias.isEmpty;
+      _sinConexion = false;
     });
     try {
-      if (_registering) {
-        await widget.api.register(_email.text.trim(), _password.text, _name.text.trim());
-      } else {
-        await widget.api.login(_email.text.trim(), _password.text);
-      }
-      _password.clear();
-      widget.onChanged();
-      await reload();
-    } on ApiException catch (error) {
-      setState(() => _error = error.message);
+      final mias = await widget.api.mine();
+      if (!mounted || ticket != _ticket) return;
+      setState(() => _mias = mias);
     } catch (_) {
-      setState(() => _error = 'No hay conexión con el archivo. Vuelve a intentarlo en un momento.');
+      if (mounted && ticket == _ticket) setState(() => _sinConexion = true);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted && ticket == _ticket) setState(() => _cargando = false);
+    }
+    if (cuenta.canModerate) {
+      try {
+        final cola = await widget.api.reviewQueue();
+        if (mounted && ticket == _ticket) setState(() => _porRevisar = cola.length);
+      } catch (_) {
+        // La cola es un extra: si falla, lo tuyo se sigue viendo.
+      }
     }
   }
 
-  Future<void> _logout() async {
-    _generation++;
+  Future<void> _corregir(StoryPin h) async {
+    final cambio = await editStory(context, h);
+    if (cambio == null || !mounted) return;
+    try {
+      await widget.api.updateStory(
+        h.id,
+        title: cambio.title,
+        body: cambio.body,
+        narratorName: cambio.narratorName,
+        narratorRelation: cambio.narratorRelation,
+      );
+      if (mounted) mostrarNotificacion(context, 'Corrección guardada.');
+    } on ApiException catch (e) {
+      if (mounted) mostrarNotificacion(context, e.message, error: true);
+    } catch (_) {
+      if (mounted) mostrarNotificacion(context, 'No hay conexión. Revisa el wifi o los datos.', error: true);
+    }
+  }
+
+  Future<void> _salir() async {
     await widget.api.logout();
     widget.onChanged();
-    setState(() {
-      _mine = [];
-      _queue = [];
-      _error = null;
-    });
-  }
-
-  /// Publica o rechaza desde la cola sin abrir la ficha.
-  Future<void> _decide(StoryPin story, {required bool publish}) async {
-    if (_deciding.contains(story.id)) return;
-    if (!publish) {
-      final sure = await confirmReject(context, story);
-      if (!sure || !mounted) return;
-    }
-    setState(() => _deciding.add(story.id));
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      if (publish) {
-        await widget.api.publish(story.id);
-      } else {
-        await widget.api.reject(story.id);
-      }
-      if (!mounted) return;
-      setState(() => _queue = [for (final s in _queue) if (s.id != story.id) s]);
-      messenger.showSnackBar(SnackBar(content: Text(publish ? '«${story.title}» ya está en el mapa.' : '«${story.title}» queda rechazada.')));
-    } on ApiException catch (error) {
-      messenger.showSnackBar(SnackBar(content: Text(error.message)));
-    } catch (_) {
-      messenger.showSnackBar(const SnackBar(content: Text('No hay conexión con el archivo.')));
-    } finally {
-      if (mounted) setState(() => _deciding.remove(story.id));
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final account = widget.api.account;
-    final narrow = MediaQuery.sizeOf(context).width < 720;
-    final pad = narrow ? 22.0 : 56.0;
-    return AnimatedSwitcher(
-      duration: Motion.of(context, Motion.settle),
-      child: account == null
-          ? _signedOut(pad, narrow)
-          : CustomScrollView(
-              key: const ValueKey('in'),
-              slivers: [
-                SliverSafeArea(
-                  bottom: false,
-                  sliver: SliverPadding(
-                    padding: EdgeInsets.fromLTRB(pad, narrow ? 28 : 56, pad, 0),
-                    sliver: SliverToBoxAdapter(
-                      child: _Profile(account: account, onLogout: _logout),
-                    ),
-                  ),
-                ),
-                if (account.canModerate) ...[
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(pad, 48, pad, 20),
-                    sliver: SliverToBoxAdapter(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Por revisar', style: display(narrow ? 34 : 44)),
-                          const SizedBox(height: 6),
-                          Text(
-                            _queue.isEmpty
-                                ? 'No hay nada esperando. Lo que deje la gente aparecerá aquí antes de llegar al mapa.'
-                                : _queue.length == 1
-                                    ? 'Una historia espera a que alguien la escuche antes de publicarla.'
-                                    : '${_queue.length} historias esperan a que alguien las escuche antes de publicarlas.',
-                            style: text(size: 15, color: Palette.haze),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_queue.isNotEmpty)
-                    SliverPadding(
-                      padding: EdgeInsets.symmetric(horizontal: pad),
-                      sliver: SliverGrid(
-                        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 520,
-                          mainAxisSpacing: 18,
-                          crossAxisSpacing: 18,
-                          mainAxisExtent: 300,
-                        ),
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final story = _queue[index];
-                            return ReviewCard(
-                              key: ValueKey(story.id),
-                              story: story,
-                              busy: _deciding.contains(story.id),
-                              onPublish: () => _decide(story, publish: true),
-                              onReject: () => _decide(story, publish: false),
-                            );
-                          },
-                          childCount: _queue.length,
-                        ),
-                      ),
-                    ),
-                ],
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(pad, 48, pad, 20),
-                  sliver: SliverToBoxAdapter(
-                    child: Column(
+    final cuenta = widget.api.account;
+    if (cuenta == null) {
+      return EntrarPage(
+        key: ValueKey(widget.api.sesionCaducada),
+        api: widget.api,
+        sesionCaducada: widget.api.sesionCaducada,
+        onHecho: () {
+          widget.onChanged();
+          reload();
+        },
+      );
+    }
+    final amplio = tamano(context) == Vdl.amplio;
+    final tarjeta = _TarjetaCuenta(
+      cuenta: cuenta,
+      porRevisar: _porRevisar,
+      onRevisar: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => RevisarPage(api: widget.api))),
+      onSalir: _salir,
+    );
+    final ajustes = kIsWeb ? null : const _Ajustes();
+    final lista = _LoQueHasDejado(
+      historias: _mias,
+      cargando: _cargando,
+      sinConexion: _sinConexion,
+      onReintentar: reload,
+      onContar: widget.onLeaveStory,
+      onCorregir: _corregir,
+    );
+    return Scaffold(
+      body: SafeArea(
+        bottom: false,
+        child: RefreshIndicator(
+          onRefresh: reload,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: MargenPagina(
+              child: amplio
+                  ? Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Lo que has dejado', style: display(narrow ? 34 : 44)),
-                        const SizedBox(height: 6),
-                        Text(
-                          _loadingMine
-                              ? 'Buscando tus historias…'
-                              : (_mine.isEmpty ? 'Todavía nada.' : '${_mine.length} ${_mine.length == 1 ? 'historia' : 'historias'}'),
-                          style: text(size: 15, color: Palette.haze),
+                        SizedBox(
+                          width: 360,
+                          child: Column(
+                            children: [
+                              tarjeta,
+                              if (ajustes != null) ...[const SizedBox(height: 24), ajustes],
+                            ],
+                          ),
                         ),
-                        if (_error != null) ...[
-                          const SizedBox(height: 14),
-                          Notice(message: _error!, action: 'Reintentar', onAction: reload),
-                        ],
+                        const SizedBox(width: 40),
+                        Expanded(child: lista),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        tarjeta,
+                        const SizedBox(height: 28),
+                        lista,
+                        if (ajustes != null) ...[const SizedBox(height: 28), ajustes],
                       ],
                     ),
-                  ),
-                ),
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(pad, 0, pad, 140),
-                  sliver: _loadingMine
-                      ? const SliverToBoxAdapter(child: LoadingSlab(height: 200, radius: 24))
-                      : _mine.isEmpty
-                      ? SliverToBoxAdapter(
-                          child: Glass(
-                            padding: const EdgeInsets.all(26),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('¿Quién te ha contado algo de un sitio?', style: display(28)),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Graba a esa persona. Basta con el móvil y cinco minutos.',
-                                  style: text(size: 15.5, color: Palette.haze),
-                                ),
-                                const SizedBox(height: 20),
-                                LampButton(label: 'Dejar una historia', icon: LucideIcons.mic, onPressed: widget.onLeaveStory),
-                              ],
-                            ),
-                          ),
-                        )
-                      : SliverGrid(
-                          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 420,
-                            mainAxisSpacing: 18,
-                            crossAxisSpacing: 18,
-                            mainAxisExtent: StoryCard.extent,
-                          ),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) => StoryCard(key: ValueKey(_mine[index].id), story: _mine[index], showStatus: true),
-                            childCount: _mine.length,
-                          ),
-                        ),
-                ),
-              ],
-            ),
-    );
-  }
-
-  Widget _signedOut(double pad, bool narrow) {
-    return Center(
-      key: const ValueKey('out'),
-      child: SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(pad, 40, pad, 140),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: AutofillGroup(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(_registering ? 'Abre tu cuenta' : 'Entra para contar', style: display(narrow ? 46 : 58)),
-                const SizedBox(height: 12),
-                Text(
-                  'Escuchar no pide cuenta. Para dejar una historia sí, y así sabemos a quién preguntar si hay dudas.',
-                  style: text(size: 16, color: Palette.haze),
-                ),
-                const SizedBox(height: 28),
-                Glass(
-                  radius: 28,
-                  padding: const EdgeInsets.all(22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _Segmented(
-                        registering: _registering,
-                        onChanged: (value) => setState(() {
-                          _registering = value;
-                          _error = null;
-                        }),
-                      ),
-                      const SizedBox(height: 22),
-                      AnimatedSize(
-                        duration: Motion.of(context, Motion.settle),
-                        curve: Motion.emphasized,
-                        child: _registering
-                            ? Padding(
-                                padding: const EdgeInsets.only(bottom: 14),
-                                child: TextField(
-                                  controller: _name,
-                                  style: text(size: 16.5),
-                                  textInputAction: TextInputAction.next,
-                                  autofillHints: const [AutofillHints.name],
-                                  decoration: const InputDecoration(labelText: 'Tu nombre', prefixIcon: Icon(LucideIcons.user, size: 20)),
-                                ),
-                              )
-                            : const SizedBox(width: double.infinity),
-                      ),
-                      TextField(
-                        controller: _email,
-                        style: text(size: 16.5),
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.email],
-                        decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(LucideIcons.mail, size: 20)),
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: _password,
-                        style: text(size: 16.5),
-                        obscureText: _hidden,
-                        autofillHints: _registering ? const [AutofillHints.newPassword] : const [AutofillHints.password],
-                        onSubmitted: (_) => _submit(),
-                        decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          helperText: _registering ? 'Al menos 8 caracteres.' : null,
-                          prefixIcon: const Icon(LucideIcons.lock, size: 20),
-                          suffixIcon: IconButton(
-                            tooltip: _hidden ? 'Mostrar la contraseña' : 'Ocultar la contraseña',
-                            onPressed: () => setState(() => _hidden = !_hidden),
-                            icon: Icon(_hidden ? LucideIcons.eye : LucideIcons.eyeOff, size: 20),
-                          ),
-                        ),
-                      ),
-                      if (_error != null) ...[const SizedBox(height: 14), Text(_error!, style: text(size: 14, color: Palette.alarm))],
-                      const SizedBox(height: 22),
-                      LampButton(
-                        label: _registering ? 'Crear la cuenta' : 'Entrar',
-                        icon: _registering ? LucideIcons.userPlus : LucideIcons.logIn,
-                        busy: _busy,
-                        expand: true,
-                        onPressed: _submit,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ),
           ),
         ),
@@ -379,104 +192,281 @@ class AccountPageState extends State<AccountPage> {
   }
 }
 
-class _Segmented extends StatelessWidget {
-  const _Segmented({required this.registering, required this.onChanged});
+class _TarjetaCuenta extends StatelessWidget {
+  const _TarjetaCuenta({
+    required this.cuenta,
+    required this.porRevisar,
+    required this.onRevisar,
+    required this.onSalir,
+  });
 
-  final bool registering;
-  final ValueChanged<bool> onChanged;
+  final Account cuenta;
+  final int porRevisar;
+  final VoidCallback onRevisar;
+  final VoidCallback onSalir;
 
   @override
   Widget build(BuildContext context) {
-    Widget option(String label, bool value) {
-      final selected = registering == value;
-      return Expanded(
-        child: Semantics(
-          button: true,
-          selected: selected,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => onChanged(value),
-            child: SizedBox(
-              height: 44,
-              child: Center(
-                child: AnimatedDefaultTextStyle(
-                  duration: Motion.quick,
-                  style: text(size: 15, weight: FontWeight.w600, color: selected ? Palette.deep : Palette.bone),
-                  child: Text(label),
-                ),
+    final c = VdlColors.of(context);
+    final letra = Theme.of(context).textTheme;
+    return Semantics(
+      container: true,
+      label: 'Tu cuenta',
+      explicitChildNodes: true,
+      child: TarjetaConPestana(
+        pestana: 'Cuenta',
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(cuenta.displayName, style: letra.headlineMedium!.copyWith(fontSize: 26)),
+            ),
+            const SizedBox(height: 2),
+            Text(cuenta.email, style: letra.bodySmall!.copyWith(color: c.piedra)),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 9),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: c.filete, width: 1.5)),
+              ),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 96,
+                    child: Text(
+                      'Rol',
+                      style: registro.copyWith(fontSize: 16, fontWeight: FontWeight.w400, color: c.piedra),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(rolCorto(cuenta.role), style: registro.copyWith(fontSize: 17, color: c.tinta)),
+                  ),
+                ],
               ),
             ),
-          ),
+            const SizedBox(height: 10),
+            Text(roleLabel(cuenta.role), style: letra.bodySmall!.copyWith(color: c.piedra)),
+            if (cuenta.canModerate) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: c.anilVelo,
+                  border: Border.all(color: c.anil, width: 2),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text.rich(
+                      TextSpan(
+                        text: 'Por revisar: ',
+                        children: [
+                          TextSpan(text: '$porRevisar', style: registro.copyWith(fontSize: 18)),
+                          TextSpan(text: porRevisar == 1 ? ' historia' : ' historias'),
+                        ],
+                      ),
+                      style: letra.bodyMedium!.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 10),
+                    BotonPlaca(
+                      etiqueta: 'Ir a revisar',
+                      icono: LucideIcons.inbox,
+                      tamano: TamanoBoton.medio,
+                      expandir: true,
+                      onPressed: onRevisar,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: EnlaceDiscreto(etiqueta: 'Salir de la cuenta', icono: LucideIcons.logOut, onPressed: onSalir),
+            ),
+          ],
         ),
-      );
-    }
+      ),
+    );
+  }
+}
 
+/// Ajustes: el tamaño de letra propio, que se suma al del móvil.
+class _Ajustes extends StatelessWidget {
+  const _Ajustes();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    final letra = Theme.of(context).textTheme;
+    final preferencia = PreferenciaLetra.of(context);
     return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(color: Palette.deep.withValues(alpha: 0.5), borderRadius: BorderRadius.circular(999)),
-      child: Stack(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: c.azulejo,
+        border: Border.all(color: c.tinta, width: 1.5),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Positioned.fill(
-            child: AnimatedAlign(
-              duration: Motion.of(context, Motion.settle),
-              curve: Motion.emphasized,
-              alignment: registering ? Alignment.centerRight : Alignment.centerLeft,
-              child: FractionallySizedBox(
-                widthFactor: 0.5,
-                child: Container(
-                  decoration: BoxDecoration(color: Palette.bone, borderRadius: BorderRadius.circular(999)),
-                ),
+          const TituloSeccion('Ajustes'),
+          const SizedBox(height: 12),
+          Text('Tamaño de letra', style: letra.bodyMedium!.copyWith(fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: c.tinta, width: 2),
+              borderRadius: BorderRadius.circular(2),
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final (i, (tamano, muestra)) in [
+                    (TamanoLetra.normal, 16.0),
+                    (TamanoLetra.grande, 19.0),
+                    (TamanoLetra.muyGrande, 22.0),
+                  ].indexed) ...[
+                    if (i > 0) Container(width: 2, color: c.tinta),
+                    Expanded(
+                      child: Semantics(
+                        inMutuallyExclusiveGroup: true,
+                        checked: preferencia.value == tamano,
+                        child: PlacaPulsable(
+                          onPressed: () => preferencia.elegir(tamano),
+                          etiqueta: tamano.nombre,
+                          hunde: false,
+                          radio: 0,
+                          seleccionado: preferencia.value == tamano,
+                          color: preferencia.value == tamano ? c.anil : c.azulejo,
+                          minimo: const Size(48, 64),
+                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                          child: ExcludeSemantics(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Aa',
+                                  textScaler: TextScaler.noScaling,
+                                  style: letra.bodyMedium!.copyWith(
+                                    fontSize: muestra,
+                                    height: 1.1,
+                                    fontWeight: FontWeight.w800,
+                                    color: preferencia.value == tamano ? c.sobreAnil : c.tinta,
+                                  ),
+                                ),
+                                Text(
+                                  tamano.nombre,
+                                  textAlign: TextAlign.center,
+                                  style: letra.bodySmall!.copyWith(
+                                    fontSize: 14,
+                                    height: 1.2,
+                                    color: preferencia.value == tamano ? c.sobreAnil : c.tinta,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
-          Row(children: [option('Ya tengo cuenta', false), option('Crear cuenta', true)]),
+          const SizedBox(height: 6),
+          Text(
+            'Se suma al tamaño que tengas en el móvil.',
+            style: letra.bodySmall!.copyWith(fontSize: 15, color: c.piedra),
+          ),
         ],
       ),
     );
   }
 }
 
-class _Profile extends StatelessWidget {
-  const _Profile({required this.account, required this.onLogout});
+class _LoQueHasDejado extends StatelessWidget {
+  const _LoQueHasDejado({
+    required this.historias,
+    required this.cargando,
+    required this.sinConexion,
+    required this.onReintentar,
+    required this.onContar,
+    required this.onCorregir,
+  });
 
-  final Account account;
-  final VoidCallback onLogout;
+  final List<StoryPin> historias;
+  final bool cargando;
+  final bool sinConexion;
+  final VoidCallback onReintentar;
+  final VoidCallback onContar;
+  final ValueChanged<StoryPin> onCorregir;
 
   @override
   Widget build(BuildContext context) {
-    final name = account.displayName.trim().isEmpty ? account.email : account.displayName.trim();
-    final initials = name.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).take(2).map((p) => p[0].toUpperCase()).join();
-    return Wrap(
-      spacing: 24,
-      runSpacing: 20,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Container(
-          width: 96,
-          height: 96,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: Palette.lampGlow,
-            boxShadow: [BoxShadow(color: Palette.lamp.withValues(alpha: 0.45), blurRadius: 40)],
+    final c = VdlColors.of(context);
+    return Semantics(
+      container: true,
+      label: 'Lo que has dejado',
+      explicitChildNodes: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const TituloSeccion('Lo que has dejado'),
+          const SizedBox(height: 4),
+          Text(
+            'Mientras una historia está en revisión, puedes corregirla.',
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(fontSize: 17, color: c.piedra),
           ),
-          child: Text(initials, style: display(44, color: Palette.deep)),
-        ),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(name, style: display(48)),
-              const SizedBox(height: 4),
-              Text(account.email, style: text(size: 15, color: Palette.haze)),
-              const SizedBox(height: 4),
-              Text(roleLabel(account.role), style: text(size: 15, color: Palette.bone.withValues(alpha: 0.85))),
-            ],
-          ),
-        ),
-        GhostButton(label: 'Salir', icon: LucideIcons.logOut, compact: true, onPressed: onLogout),
-      ],
+          const SizedBox(height: 6),
+          if (cargando)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: Cargando(texto: 'Cargando lo que has dejado…', bloques: 2),
+            )
+          else if (sinConexion)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: AvisoSinConexion(onRetry: onReintentar),
+            )
+          else if (historias.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 14),
+              child: Vacio(
+                titulo: 'Todavía no has dejado ninguna historia',
+                texto: 'Graba a alguien de tu familia o a un vecino. Es tan fácil como mandar un audio.',
+                icono: LucideIcons.mic,
+                accion: BotonPlaca(etiqueta: 'Contar una historia', icono: LucideIcons.mic, onPressed: onContar),
+              ),
+            )
+          else
+            for (final h in historias)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    FichaHistoria.de(h, sello: EstadoSello.deStatus(h.status), onTap: () => openStory(context, h)),
+                    if (h.pending) ...[
+                      const SizedBox(height: 8),
+                      BotonPlaca(
+                        etiqueta: 'Corregir',
+                        icono: LucideIcons.penLine,
+                        variante: VarianteBoton.secundario,
+                        tamano: TamanoBoton.medio,
+                        onPressed: () => onCorregir(h),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+        ],
+      ),
     );
   }
 }
