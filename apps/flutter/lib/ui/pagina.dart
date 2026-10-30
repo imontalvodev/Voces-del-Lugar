@@ -217,3 +217,62 @@ class AvisoSesionCaducada extends StatelessWidget {
     );
   }
 }
+
+/// Tarjeta de registro con una pestaña escrita a máquina («Entrada»,
+/// «Cuenta», «Nº 0142») que asoma sobre el borde.
+class TarjetaConPestana extends StatelessWidget {
+  const TarjetaConPestana({super.key, required this.pestana, required this.child, this.padding});
+
+  final String pestana;
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = VdlColors.of(context);
+    final amplio = tamano(context) == Vdl.amplio;
+    final filete = BorderSide(color: c.tinta, width: 1.5);
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: padding ?? EdgeInsets.all(amplio ? 32 : 20),
+            decoration: BoxDecoration(
+              color: c.azulejo,
+              border: Border.fromBorderSide(filete),
+              borderRadius: BorderRadius.circular(2),
+              boxShadow: [BoxShadow(color: c.sombra, offset: const Offset(4, 4))],
+            ),
+            child: child,
+          ),
+          Positioned(
+            top: -15,
+            left: 16,
+            child: ExcludeSemantics(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+                decoration: BoxDecoration(
+                  color: c.azulejo,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(2)),
+                  border: Border(top: filete, left: filete, right: filete),
+                ),
+                child: Text(
+                  pestana,
+                  style: const TextStyle(
+                    fontFamily: 'CourierPrime',
+                    fontSize: 15,
+                    height: 1.6,
+                    fontWeight: FontWeight.w700,
+                  ).copyWith(color: c.tinta),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

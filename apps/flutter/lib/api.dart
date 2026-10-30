@@ -352,6 +352,7 @@ class VocesApi {
     required String placeName,
     required LatLng point,
     String category = 'anecdota',
+    int? decade,
   }) async {
     final response = await _http.post(
       Uri.parse('$apiBase/api/v1/stories'),
@@ -359,7 +360,8 @@ class VocesApi {
       body: jsonEncode({
         'title': title,
         'body': body,
-        'narrator_name': narratorName,
+        'narrator_name': narratorName.isEmpty ? null : narratorName,
+        'decade_approx': ?decade,
         'narrator_relation': relation.isEmpty ? null : relation,
         'narrator_consent': true,
         'narrator_deceased': deceased,
