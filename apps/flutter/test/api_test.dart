@@ -49,6 +49,30 @@ void main() {
     expect(story.createdAt, DateTime.utc(2026, 9, 3, 10));
   });
 
+  test('salir de la cuenta no borra el tamaño de letra ni el borrador', () async {
+    SharedPreferences.setMockInitialValues({
+      'token': 't',
+      'role': 'admin',
+      'tamano_letra': 'muyGrande',
+      'borrador_contar': '{}',
+    });
+    final api = VocesApi(client: MockClient((_) async => http.Response('{}', 200)));
+    await api.logout();
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('token'), isNull);
+    expect(prefs.getString('role'), isNull);
+    expect(prefs.getString('tamano_letra'), 'muyGrande');
+    expect(prefs.getString('borrador_contar'), '{}');
+  });
+
+  test('si la API dice que la sesión caducó, se anota para decirlo al entrar', () async {
+    final api = VocesApi(client: MockClient((_) async => http.Response('{"detail":"x"}', 401)));
+    api.account = Account(token: 't', displayName: 'Ana', role: 'contributor', email: 'a@b.c');
+    await expectLater(api.mine(), throwsA(isA<ApiException>()));
+    expect(api.sesionCaducada, isTrue);
+    expect(api.account, isNull);
+  });
+
   test('sin los campos nuevos la historia sigue leyéndose', () {
     final story = StoryPin.fromJson(storyJson());
     expect(story.number, isNull);

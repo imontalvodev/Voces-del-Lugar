@@ -231,6 +231,10 @@ class VocesApi {
   final http.Client _http;
   Account? account;
 
+  /// La última sesión se cerró porque caducó (no porque se saliera a mano):
+  /// Cuenta lo dice al pedir entrar otra vez.
+  bool sesionCaducada = false;
+
   /// Sube cada vez que algo cambia en el archivo (historia nueva, publicada,
   /// corregida, retirada) o en la sesión. Las páginas lo escuchan para recargar.
   final changes = ValueNotifier<int>(0);
@@ -298,7 +302,10 @@ class VocesApi {
   Future<void> logout() async {
     account = null;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    // Solo la sesión: el tamaño de letra, el borrador y el mapa se quedan.
+    for (final clave in ['token', 'user_id', 'display_name', 'role', 'email']) {
+      await prefs.remove(clave);
+    }
     _touched();
   }
 
@@ -436,6 +443,7 @@ class VocesApi {
     final me = await _http.get(Uri.parse('$apiBase/api/v1/auth/me'), headers: {'Authorization': 'Bearer $token'});
     _expect(me);
     await _store(email, token, jsonDecode(me.body) as Map<String, dynamic>);
+    sesionCaducada = false;
     _touched();
   }
 
@@ -467,6 +475,7 @@ class VocesApi {
 
   void _expect(http.Response response) {
     if (response.statusCode == 401 && account != null) {
+      sesionCaducada = true;
       unawaited(logout());
       throw ApiException('La sesión ha caducado. Vuelve a entrar.');
     }
