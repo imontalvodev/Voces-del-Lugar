@@ -6,7 +6,12 @@ import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voces/api.dart';
 
-Map<String, dynamic> storyJson({String id = 's1', String placeId = 'p1', String status = 'pending_review', String author = 'u1'}) {
+Map<String, dynamic> storyJson({
+  String id = 's1',
+  String placeId = 'p1',
+  String status = 'pending_review',
+  String author = 'u1',
+}) {
   return {
     'id': id,
     'title': 'La fuente',
@@ -25,8 +30,41 @@ Map<String, dynamic> storyJson({String id = 's1', String placeId = 'p1', String 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
+  test('la historia trae número, quién la recogió, si el narrador falleció y la duración del audio', () {
+    final story = StoryPin.fromJson({
+      ...storyJson(),
+      'number': 142,
+      'author_name': 'Lucía Ortega',
+      'narrator_deceased': true,
+      'created_at': '2026-09-03T10:00:00+00:00',
+      'media': [
+        {'id': 'm1', 'url': '/api/v1/media/m1', 'media_type': 'audio', 'duration_seconds': 252},
+      ],
+    });
+    expect(story.number, 142);
+    expect(story.authorName, 'Lucía Ortega');
+    expect(story.narratorDeceased, isTrue);
+    expect(story.audioSeconds, 252);
+    expect(story.hasAudio, isTrue);
+    expect(story.createdAt, DateTime.utc(2026, 9, 3, 10));
+  });
+
+  test('sin los campos nuevos la historia sigue leyéndose', () {
+    final story = StoryPin.fromJson(storyJson());
+    expect(story.number, isNull);
+    expect(story.authorName, isNull);
+    expect(story.narratorDeceased, isFalse);
+    expect(story.audioSeconds, isNull);
+    expect(story.hasAudio, isFalse);
+    expect(story.createdAt, isNull);
+  });
+
   test('PlaceHit separa el nombre del sitio del resto de la dirección', () {
-    final hit = PlaceHit.fromJson({'label': 'Lavapiés, Centro, Madrid, Comunidad de Madrid, 28012, España', 'latitude': 40.4, 'longitude': -3.7});
+    final hit = PlaceHit.fromJson({
+      'label': 'Lavapiés, Centro, Madrid, Comunidad de Madrid, 28012, España',
+      'latitude': 40.4,
+      'longitude': -3.7,
+    });
     expect(hit.name, 'Lavapiés');
     expect(hit.context, 'Centro, Madrid, Comunidad de Madrid');
     expect(PlaceHit(label: 'Soria', latitude: 0, longitude: 0).context, '');
@@ -58,7 +96,10 @@ void main() {
         requests.add(request);
         if (request.url.path.endsWith('/auth/login')) return http.Response(jsonEncode({'access_token': 't'}), 200);
         if (request.url.path.endsWith('/auth/me')) {
-          return http.Response(jsonEncode({'id': 'u1', 'display_name': 'Ana', 'role': 'contributor', 'email': 'a@b.es'}), 200);
+          return http.Response(
+            jsonEncode({'id': 'u1', 'display_name': 'Ana', 'role': 'contributor', 'email': 'a@b.es'}),
+            200,
+          );
         }
         if (request.method == 'PATCH') {
           final body = jsonDecode(request.body) as Map<String, dynamic>;
@@ -98,7 +139,11 @@ void main() {
     expect((await api.publish('s1')).status, 'published');
     expect((await api.reject('s1')).status, 'rejected');
     expect((await api.unpublish('s1')).status, 'pending_review');
-    expect(paths, ['POST /api/v1/stories/s1/publish', 'POST /api/v1/stories/s1/reject', 'POST /api/v1/stories/s1/unpublish']);
+    expect(paths, [
+      'POST /api/v1/stories/s1/publish',
+      'POST /api/v1/stories/s1/reject',
+      'POST /api/v1/stories/s1/unpublish',
+    ]);
     await Future<void>.delayed(const Duration(milliseconds: 120));
     expect(changes, 1);
   });
@@ -106,7 +151,10 @@ void main() {
   test('si la sesión caduca, se cierra y se dice por qué', () async {
     final api = VocesApi(client: MockClient((_) async => http.Response('{"detail":"Token no válido"}', 401)))
       ..account = Account(token: 'viejo', displayName: 'Ana', role: 'admin', email: 'a@b.es');
-    await expectLater(api.mine(), throwsA(isA<ApiException>().having((e) => e.message, 'message', contains('caducado'))));
+    await expectLater(
+      api.mine(),
+      throwsA(isA<ApiException>().having((e) => e.message, 'message', contains('caducado'))),
+    );
     await Future<void>.delayed(Duration.zero);
     expect(api.account, isNull);
   });
@@ -115,7 +163,12 @@ void main() {
     final api = VocesApi(
       client: MockClient((request) async {
         expect(request.url.queryParameters['q'], 'Soria');
-        return http.Response(jsonEncode([{'label': 'Soria, Castilla y León, España', 'latitude': 41.76, 'longitude': -2.46}]), 200);
+        return http.Response(
+          jsonEncode([
+            {'label': 'Soria, Castilla y León, España', 'latitude': 41.76, 'longitude': -2.46},
+          ]),
+          200,
+        );
       }),
     );
     final hits = await api.searchPlaces('Soria');

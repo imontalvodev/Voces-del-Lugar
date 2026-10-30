@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:voces/api.dart';
 import 'package:voces/story_format.dart';
 import 'package:voces/ui/ficha.dart';
 import 'package:voces/ui/sello.dart';
@@ -62,6 +63,30 @@ void main() {
     expect(find.text('Contada por Carmen Ruiz, abuela'), findsOneWidget);
     expect(find.text('Audio · 4:12'), findsOneWidget);
     expect(find.byIcon(LucideIcons.audioLines), findsOneWidget);
+  });
+
+  testWidgets('la ficha de una historia de la API, con audio sin duración conocida', (tester) async {
+    final h = StoryPin.fromJson({
+      'id': 's1',
+      'number': 98,
+      'title': 'La procesión que cambió de calle',
+      'narrator_name': 'Julián Ortega',
+      'narrator_relation': 'bisabuelo',
+      'narrator_deceased': true,
+      'decade_approx': 1920,
+      'license': 'CC-BY-SA-4.0',
+      'status': 'published',
+      'category': 'tradicion',
+      'place': {'id': 'p', 'name': 'Calle Real', 'latitude': 41.8, 'longitude': -2.4},
+      'media': [
+        {'id': 'm', 'url': '/api/v1/media/m'},
+      ],
+    });
+    await montar(tester, SizedBox(width: 760, child: FichaHistoria.de(h, onTap: () {})));
+    expect(find.text('Nº 0098'), findsOneWidget);
+    expect(find.text('Contada por Julián Ortega, bisabuelo (fallecido)'), findsOneWidget);
+    expect(find.text('· Años 20'), findsOneWidget);
+    expect(find.text('Audio'), findsOneWidget);
   });
 
   testWidgets('sin audio dice «Texto»', (tester) async {

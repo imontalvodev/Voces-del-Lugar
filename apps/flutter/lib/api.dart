@@ -63,6 +63,11 @@ class StoryPin {
     this.authorId = '',
     this.narratorRelation,
     this.decade,
+    this.number,
+    this.authorName,
+    this.narratorDeceased = false,
+    this.audioSeconds,
+    this.createdAt,
   });
 
   final String id;
@@ -81,6 +86,19 @@ class StoryPin {
 
   /// Año aproximado de lo que se cuenta, si quien la subió lo dijo.
   final int? decade;
+
+  /// Número de ficha («Nº 0142»). Puede faltar si la API aún no lo da.
+  final int? number;
+
+  /// Nombre de la cuenta que la subió: «Recogida por».
+  final String? authorName;
+  final bool narratorDeceased;
+
+  /// Duración del primer audio, si la API la sabe.
+  final int? audioSeconds;
+  final DateTime? createdAt;
+
+  bool get hasAudio => mediaUrls.isNotEmpty;
 
   bool get published => status == 'published';
   bool get pending => status == 'pending_review';
@@ -103,6 +121,11 @@ class StoryPin {
       authorId: json['author_id'] as String? ?? '',
       narratorRelation: json['narrator_relation'] as String?,
       decade: json['decade_approx'] as int?,
+      number: json['number'] as int?,
+      authorName: json['author_name'] as String?,
+      narratorDeceased: json['narrator_deceased'] as bool? ?? false,
+      audioSeconds: media.isEmpty ? null : (media.first as Map<String, dynamic>)['duration_seconds'] as int?,
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
     );
   }
 }
@@ -118,7 +141,16 @@ class PlaceHit {
   /// Qué es según OpenStreetMap: city, town, village, province…
   final String? kind;
 
-  static const _settlements = {'city', 'town', 'village', 'hamlet', 'suburb', 'quarter', 'neighbourhood', 'municipality'};
+  static const _settlements = {
+    'city',
+    'town',
+    'village',
+    'hamlet',
+    'suburb',
+    'quarter',
+    'neighbourhood',
+    'municipality',
+  };
 
   bool get isSettlement => _settlements.contains(kind);
 
@@ -344,7 +376,9 @@ class VocesApi {
   Future<void> uploadAudio(String storyId, String filename, List<int> bytes) async {
     final request = http.MultipartRequest('POST', Uri.parse('$apiBase/api/v1/stories/$storyId/audio'));
     request.headers.addAll(_auth);
-    request.files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename, contentType: audioType(filename)));
+    request.files.add(
+      http.MultipartFile.fromBytes('file', bytes, filename: filename, contentType: audioType(filename)),
+    );
     final streamed = await _http.send(request);
     final response = await http.Response.fromStream(streamed);
     _expect(response);
@@ -359,7 +393,13 @@ class VocesApi {
   Future<StoryPin> unpublish(String storyId) => _act(storyId, 'unpublish');
 
   /// Quien la escribió la corrige mientras sigue en revisión.
-  Future<StoryPin> updateStory(String storyId, {String? title, String? body, String? narratorName, String? narratorRelation}) async {
+  Future<StoryPin> updateStory(
+    String storyId, {
+    String? title,
+    String? body,
+    String? narratorName,
+    String? narratorRelation,
+  }) async {
     final response = await _http.patch(
       Uri.parse('$apiBase/api/v1/stories/$storyId'),
       headers: _jsonAuth,
@@ -410,7 +450,13 @@ class VocesApi {
     );
     account = next;
     final prefs = await SharedPreferences.getInstance();
-    final values = {'token': token, 'user_id': next.id, 'display_name': next.displayName, 'role': next.role, 'email': email};
+    final values = {
+      'token': token,
+      'user_id': next.id,
+      'display_name': next.displayName,
+      'role': next.role,
+      'email': email,
+    };
     for (final entry in values.entries) {
       if (account != next) return;
       await prefs.setString(entry.key, entry.value);

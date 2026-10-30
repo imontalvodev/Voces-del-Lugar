@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:voces/api.dart';
 import 'package:voces/story_format.dart';
+import 'package:voces/story_format.dart' as formato show contadaPor;
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
 import 'package:voces/ui/placa.dart';
@@ -24,6 +26,32 @@ class FichaHistoria extends StatelessWidget {
     this.compacta = false,
     this.extra,
   });
+
+  /// La ficha de una historia de la API. Sin duración conocida, el audio
+  /// se anuncia sin tiempo.
+  factory FichaHistoria.de(
+    StoryPin h, {
+    Key? key,
+    required VoidCallback? onTap,
+    EstadoSello? sello,
+    bool compacta = false,
+    Widget? extra,
+  }) {
+    return FichaHistoria(
+      key: key,
+      numero: h.number,
+      titulo: h.title,
+      lugar: h.placeName,
+      categoria: h.category,
+      epoca: decadeLabel(h.decade),
+      contadaPor: formato.contadaPor(h.narratorName, h.narratorRelation, deceased: h.narratorDeceased),
+      duracionAudio: h.hasAudio ? (duracionCorta(h.audioSeconds) ?? '') : null,
+      sello: sello,
+      compacta: compacta,
+      extra: extra,
+      onTap: onTap,
+    );
+  }
 
   /// Número de ficha; sin él no hay pestaña (la API aún puede no darlo).
   final int? numero;
@@ -52,7 +80,7 @@ class FichaHistoria extends StatelessWidget {
     _sitio,
     [categoryLabel(categoria), ?epoca].join(', '),
     'Contada por $contadaPor',
-    duracionAudio == null ? 'Texto' : 'Audio, $duracionAudio',
+    duracionAudio == null ? 'Texto' : (duracionAudio!.isEmpty ? 'Audio' : 'Audio, $duracionAudio'),
   ].join('. ');
 
   @override
@@ -94,7 +122,7 @@ class FichaHistoria extends StatelessWidget {
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(
-                    duracionAudio == null ? 'Texto' : 'Audio · $duracionAudio',
+                    duracionAudio == null ? 'Texto' : (duracionAudio!.isEmpty ? 'Audio' : 'Audio · $duracionAudio'),
                     style: texto.bodySmall!.copyWith(color: c.anil, fontWeight: FontWeight.w700),
                   ),
                 ),
