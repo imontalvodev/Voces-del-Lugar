@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
+import 'package:voces/links.dart';
 import 'package:voces/story_format.dart';
-import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/story_card.dart';
-import 'package:voces/ui/tokens.dart';
+import 'package:voces/ui/estados.dart';
+import 'package:voces/ui/ficha.dart';
+import 'package:voces/ui/pagina.dart';
+import 'package:voces/ui/placa.dart';
+import 'package:voces/ui/sello.dart';
 
+/// Inicio: qué es esto, las dos acciones y lo último que se ha publicado.
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.api, required this.onLeaveStory, required this.onOpenMap});
 
@@ -19,9 +23,10 @@ class HomePage extends StatefulWidget {
 
 class HomePageState extends State<HomePage> {
   List<StoryPin> _stories = [];
-  String? _error;
+  bool _sinConexion = false;
   bool _loading = true;
   String? _category;
+  int _ticket = 0;
 
   @override
   void initState() {
@@ -36,22 +41,18 @@ class HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  int _ticket = 0;
-
   Future<void> reload() async {
     if (!mounted) return;
     final ticket = ++_ticket;
     setState(() {
       _loading = _stories.isEmpty;
-      _error = null;
+      _sinConexion = false;
     });
     try {
       final stories = await widget.api.archive();
       if (mounted && ticket == _ticket) setState(() => _stories = stories);
-    } on ApiException catch (error) {
-      if (mounted && ticket == _ticket) setState(() => _error = error.message);
     } catch (_) {
-      if (mounted && ticket == _ticket) setState(() => _error = 'No hay conexión con el archivo.');
+      if (mounted && ticket == _ticket) setState(() => _sinConexion = true);
     } finally {
       if (mounted && ticket == _ticket) setState(() => _loading = false);
     }
@@ -59,186 +60,135 @@ class HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final narrow = size.width < 720;
-    final pad = narrow ? 22.0 : 56.0;
-    final filtered = _category == null
-        ? _stories
-        : [
-            for (final s in _stories)
-              if (s.category == _category) s,
-          ];
-    final categories = {for (final s in _stories) s.category}.toList()..sort();
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(pad, narrow ? 28 : 56, pad, 48),
-              child: _Hero(narrow: narrow, onLeaveStory: widget.onLeaveStory, onOpenMap: widget.onOpenMap),
-            ),
-          ),
-        ),
-        DecoratedSliver(
-          decoration: const BoxDecoration(color: Palette.deep),
-          sliver: SliverMainAxisGroup(
-            slivers: [
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(pad, 8, pad, 0),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Lo último que se ha contado', style: display(narrow ? 36 : 48)),
-                      const SizedBox(height: 8),
-                      Text(
-                        _loading
-                            ? 'Buscando en el archivo…'
-                            : '${_stories.length} ${_stories.length == 1 ? 'historia publicada' : 'historias publicadas'}',
-                        style: text(size: 15, color: Palette.haze),
-                      ),
-                      if (categories.length > 1) ...[
-                        const SizedBox(height: 20),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          clipBehavior: Clip.none,
-                          child: Row(
-                            children: [
-                              FilterPill(
-                                label: 'Todas',
-                                selected: _category == null,
-                                onTap: () => setState(() => _category = null),
-                              ),
-                              for (final c in categories) ...[
-                                const SizedBox(width: 8),
-                                FilterPill(
-                                  label: categoryLabel(c),
-                                  selected: _category == c,
-                                  onTap: () => setState(() => _category = _category == c ? null : c),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 28),
-                    ],
-                  ),
-                ),
-              ),
-              SliverPadding(padding: EdgeInsets.fromLTRB(pad, 0, pad, 140), sliver: _body(filtered)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _body(List<StoryPin> stories) {
-    const grid = SliverGridDelegateWithMaxCrossAxisExtent(
-      maxCrossAxisExtent: 420,
-      mainAxisSpacing: 18,
-      crossAxisSpacing: 18,
-      mainAxisExtent: StoryCard.extent,
-    );
-    if (_loading) {
-      return SliverGrid(
-        gridDelegate: grid,
-        delegate: SliverChildBuilderDelegate(
-          (_, _) => const LoadingSlab(height: StoryCard.extent, radius: 24),
-          childCount: 3,
-        ),
-      );
-    }
-    if (_error != null) {
-      return SliverToBoxAdapter(
-        child: Notice(message: 'No se pudo leer el archivo: $_error', action: 'Reintentar', onAction: reload),
-      );
-    }
-    if (stories.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Glass(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _category == null ? 'Aún no hay ninguna historia.' : 'No hay historias de este tipo.',
-                style: display(32),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'La primera puede ser la de tu calle, tu plaza o el pueblo de tus abuelos.',
-                style: text(size: 16, color: Palette.haze),
-              ),
-              const SizedBox(height: 22),
-              LampButton(label: 'Dejar la primera', icon: LucideIcons.mic, onPressed: widget.onLeaveStory),
-            ],
-          ),
-        ),
-      );
-    }
-    return SliverGrid(
-      gridDelegate: grid,
-      delegate: SliverChildBuilderDelegate(
-        (context, index) => StoryCard(key: ValueKey(stories[index].id), story: stories[index]),
-        childCount: stories.length,
+    final ancho = tamano(context);
+    final amplio = ancho != Vdl.compacto;
+    final visibles = [
+      for (final s in _stories)
+        if (_category == null || s.category == _category) s,
+    ];
+    final acciones = [
+      BotonPlaca(
+        etiqueta: 'Dejar una historia',
+        icono: LucideIcons.mic,
+        expandir: !amplio,
+        onPressed: widget.onLeaveStory,
       ),
-    );
-  }
-}
-
-class _Hero extends StatelessWidget {
-  const _Hero({required this.narrow, required this.onLeaveStory, required this.onOpenMap});
-
-  final bool narrow;
-  final VoidCallback onLeaveStory;
-  final VoidCallback onOpenMap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 760),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Palette.lamp,
-                  boxShadow: [BoxShadow(color: Palette.lamp.withValues(alpha: 0.8), blurRadius: 12)],
+      BotonPlaca(
+        etiqueta: 'Abrir el mapa',
+        icono: LucideIcons.map,
+        variante: VarianteBoton.secundario,
+        expandir: !amplio,
+        onPressed: widget.onOpenMap,
+      ),
+    ];
+    final chips = [
+      for (final categoria in [null, ...storyCategories])
+        ChipTipo(
+          categoria: categoria,
+          elegido: _category == categoria,
+          onPressed: () => setState(() => _category = categoria),
+        ),
+    ];
+    return RefreshIndicator(
+      onRefresh: reload,
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: SafeArea(
+              bottom: false,
+              child: MargenPagina(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (ancho == Vdl.compacto) ...[const Marca(pequena: true), const SizedBox(height: 18)],
+                    const TituloPantalla('Las historias de cada sitio, contadas por quien las vivió.', grande: true),
+                    const Entradilla(
+                      'Graba o escribe lo que pasó, márcalo en el mapa y quedará guardado para quien venga después.',
+                    ),
+                    const SizedBox(height: 24),
+                    if (amplio)
+                      Wrap(spacing: 12, runSpacing: 12, children: acciones)
+                    else
+                      Column(children: [acciones[0], const SizedBox(height: 12), acciones[1]]),
+                    SizedBox(height: amplio ? 56 : 36),
+                    const TituloSeccion('Lo último que se ha publicado'),
+                    const SizedBox(height: 14),
+                    Semantics(
+                      container: true,
+                      label: 'Filtrar por tipo',
+                      child: amplio
+                          ? Wrap(spacing: 8, runSpacing: 8, children: chips)
+                          : SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              clipBehavior: Clip.none,
+                              child: Row(
+                                children: [
+                                  for (final (i, chip) in chips.indexed) ...[if (i > 0) const SizedBox(width: 8), chip],
+                                ],
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+                    _contenido(visibles, amplio),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Text('Voces del Lugar', style: text(size: 16, weight: FontWeight.w600)),
-            ],
-          ),
-          SizedBox(height: narrow ? 22 : 30),
-          Text('Cada sitio guarda algo que alguien contó.', style: display(narrow ? 50 : 88, height: 0.98)),
-          const SizedBox(height: 18),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Text(
-              'Historias que la gente mayor asocia a una calle, una plaza o un pueblo. Escúchalas donde pasaron, o deja la que tú conoces.',
-              style: text(size: narrow ? 16 : 18, color: Palette.bone.withValues(alpha: 0.82), height: 1.55),
             ),
-          ),
-          const SizedBox(height: 26),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              LampButton(label: 'Dejar una historia', icon: LucideIcons.mic, onPressed: onLeaveStory),
-              GhostButton(label: 'Abrir el mapa', icon: LucideIcons.map, onPressed: onOpenMap),
-            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _contenido(List<StoryPin> visibles, bool amplio) {
+    if (_loading) return const Cargando();
+    if (_sinConexion) return AvisoSinConexion(onRetry: reload);
+    if (visibles.isEmpty) {
+      final categoria = _category;
+      if (categoria == null) {
+        return Vacio(
+          titulo: 'Todavía no hay ninguna historia',
+          texto: 'Puedes ser la primera persona en dejar una.',
+          icono: LucideIcons.searchX,
+          accion: BotonPlaca(
+            etiqueta: 'Dejar una historia',
+            icono: LucideIcons.mic,
+            tamano: TamanoBoton.medio,
+            onPressed: widget.onLeaveStory,
+          ),
+        );
+      }
+      return Vacio(
+        titulo: 'Todavía no hay ninguna ${categoryLabel(categoria).toLowerCase()}',
+        texto: 'Puedes ser la primera persona en dejar una.',
+        icono: LucideIcons.searchX,
+        accion: BotonPlaca(
+          etiqueta: 'Ver todas las historias',
+          variante: VarianteBoton.secundario,
+          tamano: TamanoBoton.medio,
+          onPressed: () => setState(() => _category = null),
+        ),
+      );
+    }
+    final fichas = [
+      for (final h in visibles) FichaHistoria.de(h, key: ValueKey(h.id), onTap: () => openStory(context, h)),
+    ];
+    if (!amplio) {
+      return Column(
+        children: [
+          for (final (i, ficha) in fichas.indexed) ...[if (i > 0) const SizedBox(height: 14), ficha],
+        ],
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columna = (constraints.maxWidth - 24) / 2;
+        return Wrap(
+          spacing: 24,
+          runSpacing: 20,
+          children: [for (final ficha in fichas) SizedBox(width: columna, child: ficha)],
+        );
+      },
     );
   }
 }
