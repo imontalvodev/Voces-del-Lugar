@@ -452,7 +452,6 @@ class _DondePaso extends StatelessWidget {
     final medida = PlacaLugar.medida(story.placeName, MediaQuery.textScalerOf(context));
     return Semantics(
       container: true,
-      label: 'Dónde pasó',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

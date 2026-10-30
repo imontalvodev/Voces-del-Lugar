@@ -69,7 +69,9 @@ class EtiquetaTipo extends StatelessWidget {
       children: [
         Icon(iconoTipo(categoria), size: 17, color: tinta),
         const SizedBox(width: 6),
-        Text(categoryLabel(categoria), style: registro.copyWith(fontSize: 16, color: tinta)),
+        Flexible(
+          child: Text(categoryLabel(categoria), style: registro.copyWith(fontSize: 16, color: tinta)),
+        ),
       ],
     );
   }

@@ -412,7 +412,6 @@ class _LoQueHasDejado extends StatelessWidget {
     final c = VdlColors.of(context);
     return Semantics(
       container: true,
-      label: 'Lo que has dejado',
       explicitChildNodes: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

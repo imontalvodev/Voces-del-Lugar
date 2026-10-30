@@ -106,8 +106,15 @@ class _BuscadorLugaresState extends State<BuscadorLugares> {
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                  hintText: 'Busca un pueblo, barrio o calle',
-                  hintStyle: letra.bodyMedium!.copyWith(color: c.piedra),
+                  // La etiqueta ya la pone el Semantics de arriba: la pista solo se ve.
+                  hint: ExcludeSemantics(
+                    child: Text(
+                      'Busca un pueblo, barrio o calle',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: letra.bodyMedium!.copyWith(color: c.piedra),
+                    ),
+                  ),
                 ),
               ),
             ),

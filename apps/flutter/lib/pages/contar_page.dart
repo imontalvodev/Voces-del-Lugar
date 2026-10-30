@@ -595,16 +595,19 @@ class ContarPageState extends State<ContarPage> {
                     left: 10,
                     right: 80,
                     bottom: 10,
+                    // El mapa ya lo dice en su etiqueta; aquí solo se ve.
                     child: IgnorePointer(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: c.azulejo,
-                          border: Border.all(color: c.tinta, width: 1.5),
-                        ),
-                        child: Text(
-                          'Toca el mapa para marcar el sitio',
-                          style: letra.bodySmall!.copyWith(fontWeight: FontWeight.w700),
+                      child: ExcludeSemantics(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: c.azulejo,
+                            border: Border.all(color: c.tinta, width: 1.5),
+                          ),
+                          child: Text(
+                            'Toca el mapa para marcar el sitio',
+                            style: letra.bodySmall!.copyWith(fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ),
                     ),
