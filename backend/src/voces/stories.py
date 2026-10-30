@@ -6,12 +6,14 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Session
 
+from voces import moderation
+from voces.config import Settings
 from voces.schemas import CATEGORIES, LICENSES, StoryIn, StoryOut, StoryPatch
 
 STORY_COLUMNS = """
     s.id, s.number, s.title, s.body, s.transcript, s.narrator_name, s.narrator_relation,
     s.narrator_consent, s.narrator_deceased, s.consent_recorded_at,
-    s.category, s.decade_approx, s.original_language, s.license, s.status,
+    s.category, s.decade_approx, s.original_language, s.license, s.status, s.review_reason,
     s.created_at, s.published_at, s.author_id, u.display_name AS author_name,
     p.id AS place_id, p.name AS place_name, p.place_type, p.description AS place_description,
     ST_Y(p.location::geometry) AS latitude,
@@ -30,10 +32,24 @@ def validate_story(payload: StoryIn) -> None:
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Hace falta el consentimiento del narrador o de su familia",
         )
+    _reject_junk(payload.title, payload.body, payload.narrator_name)
 
 
-def create_story(session: Session, author_id: UUID, payload: StoryIn) -> UUID:
+def _reject_junk(title: str, body: str | None, narrator: str | None) -> None:
+    junk = moderation.junk_reason(title, body, narrator)
+    if junk:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, junk)
+
+
+def create_story(session: Session, author_id: UUID, payload: StoryIn, settings: Settings) -> UUID:
     validate_story(payload)
+    body = _blank_to_none(payload.body)
+    hold = moderation.hold_reason(payload.title, body, payload.narrator_name)
+    if hold is None and _recent_count(session, author_id) >= moderation.MANY_PER_HOUR:
+        hold = moderation.MANY
+    # Sin texto, la historia espera a su audio antes de publicarse o revisarse.
+    publish = settings.auto_publish and hold is None and body is not None
+    review_reason = None if publish else hold or (moderation.AWAITING_MEDIA if body is None else None)
     place = payload.place
     existing = session.execute(
         text(
@@ -81,12 +97,14 @@ def create_story(session: Session, author_id: UUID, payload: StoryIn) -> UUID:
             INSERT INTO stories (
                 place_id, author_id, narrator_name, narrator_relation, title, body,
                 transcript, narrator_consent, narrator_deceased, consent_recorded_at,
-                category, decade_approx, original_language, license, status
+                category, decade_approx, original_language, license, status,
+                review_reason, published_at
             )
             VALUES (
                 :place_id, :author_id, :narrator_name, :narrator_relation, :title, :body,
                 :transcript, true, :narrator_deceased, now(),
-                :category, :decade_approx, :original_language, :license, 'pending_review'
+                :category, :decade_approx, :original_language, :license, :status,
+                :review_reason, CASE WHEN :status = 'published' THEN now() END
             )
             RETURNING id
             """
@@ -97,17 +115,57 @@ def create_story(session: Session, author_id: UUID, payload: StoryIn) -> UUID:
             "narrator_name": payload.narrator_name,
             "narrator_relation": payload.narrator_relation,
             "title": payload.title,
-            "body": _blank_to_none(payload.body),
+            "body": body,
             "transcript": _blank_to_none(payload.transcript),
             "narrator_deceased": payload.narrator_deceased,
             "category": payload.category,
             "decade_approx": payload.decade_approx,
             "original_language": payload.original_language,
             "license": payload.license,
+            "status": "published" if publish else "pending_review",
+            "review_reason": review_reason,
         },
     ).scalar_one()
     session.commit()
     return story_id
+
+
+def settle_after_audio(session: Session, story_id: UUID, settings: Settings) -> None:
+    """Con el audio ya subido, la que lo esperaba se publica o pasa a revisión."""
+    if settings.auto_publish:
+        session.execute(
+            text(
+                """
+                UPDATE stories
+                SET status = 'published', published_at = now(), review_reason = NULL
+                WHERE id = :id AND status = 'pending_review' AND review_reason = :waiting
+                """
+            ),
+            {"id": story_id, "waiting": moderation.AWAITING_MEDIA},
+        )
+    else:
+        session.execute(
+            text(
+                """
+                UPDATE stories SET review_reason = NULL
+                WHERE id = :id AND review_reason = :waiting
+                """
+            ),
+            {"id": story_id, "waiting": moderation.AWAITING_MEDIA},
+        )
+    session.commit()
+
+
+def _recent_count(session: Session, author_id: UUID) -> int:
+    return session.execute(
+        text(
+            """
+            SELECT count(*) FROM stories
+            WHERE author_id = :author_id AND created_at > now() - interval '1 hour'
+            """
+        ),
+        {"author_id": author_id},
+    ).scalar_one()
 
 
 def fetch_story(session: Session, story_id: UUID) -> dict | None:
@@ -203,6 +261,8 @@ def update_story(session: Session, story_id: UUID, author_id: UUID, patch: Story
     changes = patch.model_dump(exclude_unset=True)
     if not changes:
         return
+    merged = {**row, **changes}
+    _reject_junk(merged["title"], merged["body"], merged["narrator_name"])
     assignments = ", ".join(f"{column} = :{column}" for column in changes)
     session.execute(
         text(f"UPDATE stories SET {assignments} WHERE id = :id"),
@@ -220,6 +280,7 @@ def fetch_review(session: Session) -> list[dict]:
             JOIN places p ON p.id = s.place_id
             JOIN users u ON u.id = s.author_id
             WHERE s.status = 'pending_review'
+              AND s.review_reason IS DISTINCT FROM 'awaiting_media'
             ORDER BY s.created_at
             """
         )
@@ -264,6 +325,7 @@ def to_story(row: dict, media: list[dict]) -> StoryOut:
         original_language=row["original_language"],
         license=row["license"],
         status=row["status"],
+        review_reason=row["review_reason"],
         created_at=row["created_at"],
         published_at=row["published_at"],
         author_id=row["author_id"],

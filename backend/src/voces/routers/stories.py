@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from voces.config import Settings, get_settings
 from voces.db import get_session
 from voces.deps import optional_user_id, require_user
 from voces.deps import load_user
@@ -91,8 +92,9 @@ def create(
     payload: StoryIn,
     user: Annotated[dict, Depends(require_user)],
     session: Annotated[Session, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_settings)],
 ) -> StoryOut:
-    story_id = create_story(session, user["id"], payload)
+    story_id = create_story(session, user["id"], payload, settings)
     row = fetch_story(session, story_id)
     return to_story(row, [])
 
@@ -121,7 +123,7 @@ def publish(
         text(
             """
             UPDATE stories
-            SET status = 'published', published_at = now()
+            SET status = 'published', published_at = now(), review_reason = NULL
             WHERE id = :id
             """
         ),
@@ -160,7 +162,13 @@ def unpublish(
     if row["status"] != "published":
         raise HTTPException(status.HTTP_409_CONFLICT, "Solo se retira una historia publicada")
     session.execute(
-        text("UPDATE stories SET status = 'pending_review', published_at = NULL WHERE id = :id"),
+        text(
+            """
+            UPDATE stories
+            SET status = 'pending_review', published_at = NULL, review_reason = 'unpublished'
+            WHERE id = :id
+            """
+        ),
         {"id": story_id},
     )
     session.commit()

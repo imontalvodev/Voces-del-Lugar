@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     media_root: Path = Path("./data/media")
     max_audio_bytes: int = 25 * 1024 * 1024
     cors_origins: str = "*"
+    # Lo que pasa el filtro se publica sin esperar a nadie.
+    auto_publish: bool = True
 
     def check_production(self) -> None:
         if self.voces_env != "production":

@@ -93,6 +93,7 @@ class StoryOut(BaseModel):
     original_language: str
     license: str
     status: str
+    review_reason: str | None = None
     created_at: datetime
     published_at: datetime | None
     author_id: UUID

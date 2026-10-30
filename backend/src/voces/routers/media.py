@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from voces.config import Settings, get_settings
 from voces.db import get_session
 from voces.deps import load_user, optional_user_id, require_user
-from voces.stories import can_read, fetch_story, media_for, to_story
+from voces.stories import can_read, fetch_story, media_for, settle_after_audio, to_story
 
 router = APIRouter(tags=["media"])
 
@@ -39,7 +39,9 @@ def upload_audio(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No está esa historia")
     if row["author_id"] != user["id"]:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo quien subió la historia puede añadir el audio")
-    if row["status"] not in ("draft", "pending_review"):
+    # Una escrita que se publicó sola puede recibir después su único audio.
+    has_audio = bool(media_for(session, [story_id]).get(story_id))
+    if row["status"] not in ("draft", "pending_review") and (row["status"] != "published" or has_audio):
         raise HTTPException(status.HTTP_409_CONFLICT, "Esta historia ya no admite audio")
     content_type = (file.content_type or "").split(";")[0].strip().lower()
     if content_type not in AUDIO_TYPES:
@@ -66,6 +68,7 @@ def upload_audio(
         {"id": media_id, "story_id": story_id, "storage_key": storage_key},
     )
     session.commit()
+    settle_after_audio(session, story_id, settings)
     return to_story(fetch_story(session, story_id), media_for(session, [story_id]).get(story_id, []))
 
 
