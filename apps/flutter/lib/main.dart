@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:voces/api.dart';
 import 'package:voces/links.dart';
+import 'package:voces/navegacion.dart';
 import 'package:voces/shell.dart';
 import 'package:voces/theme/letra.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
-import 'package:voces/ui/tokens.dart';
+import 'package:voces/ui/pagina.dart';
 
 Future<void> main() async {
   usePathUrlStrategy(); // /historia/<id> en vez de /#/historia/<id>
@@ -28,6 +29,9 @@ class _VocesAppState extends State<VocesApp> {
   final _api = VocesApi();
   var _ready = false;
 
+  /// La sección de la dirección por la que se entra (en web, la barra).
+  final _inicial = seccionDeRuta(WidgetsBinding.instance.platformDispatcher.defaultRouteName);
+
   @override
   void initState() {
     super.initState();
@@ -48,15 +52,7 @@ class _VocesAppState extends State<VocesApp> {
         themeMode: ThemeMode.system,
         builder: (context, child) => EscalaLetra(preferencia: widget.letra, child: child!),
         onGenerateRoute: vocesRoute,
-        home: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 600),
-          child: _ready
-              ? AppShell(api: _api)
-              : Scaffold(
-                  backgroundColor: Palette.night,
-                  body: Center(child: Text('Voces del Lugar', style: display(40))),
-                ),
-        ),
+        home: _ready ? AppShell(api: _api, inicial: _inicial) : const Scaffold(body: Center(child: Marca())),
       ),
     );
   }

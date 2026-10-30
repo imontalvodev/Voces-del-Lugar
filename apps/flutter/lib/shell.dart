@@ -1,33 +1,48 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
+import 'package:voces/navegacion.dart';
 import 'package:voces/pages/account_page.dart';
 import 'package:voces/pages/compose_page.dart';
 import 'package:voces/pages/home_page.dart';
 import 'package:voces/pages/map_page.dart';
-import 'package:voces/ui/kit.dart';
-import 'package:voces/ui/tokens.dart';
+import 'package:voces/ui/avisos.dart';
+import 'package:voces/ui/pagina.dart';
+import 'package:voces/ui/placa.dart';
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.api});
+  const AppShell({super.key, required this.api, this.inicial = Seccion.inicio});
 
   final VocesApi api;
+  final Seccion inicial;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
-  int _index = 0;
+  late Seccion _seccion = widget.inicial;
   LatLng? _pendingPoint;
   String? _pendingPlace;
-  final _homeKey = GlobalKey<HomePageState>();
   final _mapKey = GlobalKey<MapPageState>();
-  final _accountKey = GlobalKey<AccountPageState>();
+  final _pilas = {for (final s in Seccion.values) s: GlobalKey<NavigatorState>()};
+
+  NavigatorState? get _pila => _pilas[_seccion]!.currentState;
+
+  void _ir(Seccion seccion) {
+    if (seccion == _seccion) {
+      _pila?.popUntil((route) => route.isFirst);
+      return;
+    }
+    setState(() => _seccion = seccion);
+    if (kIsWeb) SystemNavigator.routeInformationUpdated(uri: Uri(path: seccion.ruta));
+  }
 
   void _choosePointOnMap() {
-    setState(() => _index = 1);
+    _ir(Seccion.mapa);
     WidgetsBinding.instance.addPostFrameCallback((_) => _mapKey.currentState?.beginPlacing());
   }
 
@@ -35,220 +50,101 @@ class _AppShellState extends State<AppShell> {
     if (widget.api.account == null) {
       _pendingPoint = point;
       _pendingPlace = placeName;
-      setState(() => _index = 2);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Entra o crea una cuenta y seguimos con la historia de ese sitio.')));
+      _ir(Seccion.cuenta);
+      mostrarNotificacion(context, 'Entra o crea una cuenta y seguimos con la historia de ese sitio.');
       return;
     }
     _pendingPoint = null;
     _pendingPlace = null;
     final created = await Navigator.push<bool>(
       context,
-      PageRouteBuilder<bool>(
-        transitionDuration: Motion.of(context, const Duration(milliseconds: 520)),
-        reverseTransitionDuration: Motion.of(context, const Duration(milliseconds: 360)),
-        pageBuilder: (_, _, _) => ComposePage(api: widget.api, point: point, placeName: placeName),
-        transitionsBuilder: (context, animation, _, child) {
-          final curved = CurvedAnimation(parent: animation, curve: Motion.out, reverseCurve: Curves.easeIn);
-          return FadeTransition(
-            opacity: curved,
-            child: SlideTransition(
-              position: Tween(begin: const Offset(0, 0.08), end: Offset.zero).animate(curved),
-              child: child,
-            ),
-          );
-        },
-      ),
+      MaterialPageRoute<bool>(builder: (_) => ComposePage(api: widget.api, point: point, placeName: placeName)),
     );
     if (created == true) _mapKey.currentState?.reload();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final pages = [
-      HomePage(
-        key: _homeKey,
-        api: widget.api,
-        onLeaveStory: _choosePointOnMap,
-        onOpenMap: () => setState(() => _index = 1),
-      ),
-      MapPage(key: _mapKey, api: widget.api, onLeaveStory: _leaveStory),
-      AccountPage(
-        key: _accountKey,
-        api: widget.api,
-        onLeaveStory: _choosePointOnMap,
-        onChanged: () {
-          setState(() {});
-          final pending = _pendingPoint;
-          if (pending != null && widget.api.account != null) _leaveStory(pending, _pendingPlace);
-        },
-      ),
-    ];
-    return Scaffold(
-      backgroundColor: Palette.night,
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: IndexedStack(
-              index: _index,
-              children: [
-                for (var i = 0; i < pages.length; i++)
-                  _Reveal(
-                    active: i == _index,
-                    child: TickerMode(enabled: i == _index, child: pages[i]),
-                  ),
-              ],
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Center(
-                  child: _Dock(index: _index, onSelect: (i) => setState(() => _index = i)),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+  /// Atrás del sistema: primero se deshace la pila de la sección; después se
+  /// vuelve a Inicio; desde Inicio, sale de la app.
+  bool get _puedeSalir => _seccion == Seccion.inicio && !(_pila?.canPop() ?? false);
 
-/// Al volver a una pestaña, entra con un fundido corto; el estado se conserva.
-class _Reveal extends StatefulWidget {
-  const _Reveal({required this.active, required this.child});
-
-  final bool active;
-  final Widget child;
-
-  @override
-  State<_Reveal> createState() => _RevealState();
-}
-
-class _RevealState extends State<_Reveal> with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 380),
-    value: widget.active ? 1 : 0,
-  );
-
-  @override
-  void didUpdateWidget(covariant _Reveal old) {
-    super.didUpdateWidget(old);
-    if (widget.active && !old.active) {
-      if (MediaQuery.disableAnimationsOf(context)) {
-        _controller.value = 1;
-      } else {
-        _controller.forward(from: 0);
-      }
+  void _atras() {
+    final pila = _pila;
+    if (pila != null && pila.canPop()) {
+      pila.maybePop();
+    } else if (_seccion != Seccion.inicio) {
+      _ir(Seccion.inicio);
     }
   }
 
   @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final curved = CurvedAnimation(parent: _controller, curve: Motion.out);
-    return FadeTransition(
-      opacity: curved,
-      child: ScaleTransition(scale: Tween(begin: 0.985, end: 1.0).animate(curved), child: widget.child),
+    Widget pila(Seccion s, Widget raiz) =>
+        PilaSeccion(navigatorKey: _pilas[s]!, raiz: raiz, onCambio: () => mounted ? setState(() {}) : null);
+    final cuenta = AccountPage(
+      api: widget.api,
+      onLeaveStory: _choosePointOnMap,
+      onChanged: () {
+        setState(() {});
+        final pending = _pendingPoint;
+        if (pending != null && widget.api.account != null) _leaveStory(pending, _pendingPlace);
+      },
+    );
+    return PopScope(
+      canPop: _puedeSalir,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _atras();
+      },
+      child: Armazon(
+        seccion: _seccion,
+        onSeccion: _ir,
+        moderador: widget.api.account?.canModerate ?? false,
+        paginas: {
+          Seccion.inicio: pila(
+            Seccion.inicio,
+            HomePage(api: widget.api, onLeaveStory: () => _ir(Seccion.contar), onOpenMap: () => _ir(Seccion.mapa)),
+          ),
+          Seccion.mapa: pila(Seccion.mapa, MapPage(key: _mapKey, api: widget.api, onLeaveStory: _leaveStory)),
+          Seccion.contar: pila(
+            Seccion.contar,
+            _ContarProvisional(onElegirSitio: _choosePointOnMap, onSalir: () => _ir(Seccion.inicio)),
+          ),
+          Seccion.cuenta: pila(Seccion.cuenta, cuenta),
+          Seccion.revisar: pila(Seccion.revisar, cuenta),
+        },
+      ),
     );
   }
 }
 
-class _Dock extends StatelessWidget {
-  const _Dock({required this.index, required this.onSelect});
+/// Entrada a «Contar» hasta que el asistente tenga su paso de sitio.
+class _ContarProvisional extends StatelessWidget {
+  const _ContarProvisional({required this.onElegirSitio, required this.onSalir});
 
-  final int index;
-  final ValueChanged<int> onSelect;
-
-  static const _itemWidth = 92.0;
-  static const _items = [
-    ('Inicio', LucideIcons.house, LucideIcons.house),
-    ('Mapa', LucideIcons.map, LucideIcons.map),
-    ('Cuenta', LucideIcons.circleUser, LucideIcons.circleUser),
-  ];
+  final VoidCallback onElegirSitio;
+  final VoidCallback onSalir;
 
   @override
   Widget build(BuildContext context) {
-    return Glass(
-      radius: 999,
-      tint: Palette.glassStrong.withValues(alpha: 0.72),
-      padding: const EdgeInsets.all(6),
-      child: SizedBox(
-        width: _itemWidth * _items.length,
-        height: 60,
-        child: Stack(
-          children: [
-            AnimatedPositioned(
-              duration: Motion.of(context, const Duration(milliseconds: 520)),
-              curve: Curves.easeOutBack,
-              left: index * _itemWidth,
-              top: 0,
-              bottom: 0,
-              width: _itemWidth,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: Palette.lampGlow,
-                  borderRadius: BorderRadius.circular(999),
-                  boxShadow: [BoxShadow(color: Palette.lamp.withValues(alpha: 0.45), blurRadius: 22, spreadRadius: -4)],
-                ),
+    return SafeArea(
+      child: SingleChildScrollView(
+        child: MargenPagina(
+          ancho: 640,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              EnlaceDiscreto(etiqueta: 'Volver', icono: LucideIcons.arrowLeft, onPressed: onSalir),
+              const SizedBox(height: 12),
+              const TituloPantalla('Contar una historia'),
+              const Entradilla('Empieza por el sitio: toca el mapa donde pasó.'),
+              const SizedBox(height: 24),
+              BotonPlaca(
+                etiqueta: 'Elegir el sitio en el mapa',
+                icono: LucideIcons.mapPin,
+                expandir: true,
+                onPressed: onElegirSitio,
               ),
-            ),
-            Row(
-              children: [
-                for (var i = 0; i < _items.length; i++)
-                  SizedBox(
-                    width: _itemWidth,
-                    child: Semantics(
-                      selected: i == index,
-                      child: Pressable(
-                        onTap: () => onSelect(i),
-                        lift: false,
-                        semanticLabel: _items[i].$1,
-                        child: SizedBox(
-                          height: 60,
-                          child: ExcludeSemantics(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  i == index ? _items[i].$3 : _items[i].$2,
-                                  size: 22,
-                                  color: i == index ? Palette.deep : Palette.bone,
-                                ),
-                                const SizedBox(height: 3),
-                                AnimatedDefaultTextStyle(
-                                  duration: Motion.quick,
-                                  style: text(
-                                    size: 12.5,
-                                    weight: FontWeight.w600,
-                                    height: 1.1,
-                                    color: i == index ? Palette.deep : Palette.haze,
-                                  ),
-                                  child: Text(_items[i].$1),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
