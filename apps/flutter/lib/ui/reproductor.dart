@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:voces/duraciones.dart';
 import 'package:voces/theme/vdl_colors.dart';
 import 'package:voces/theme/vdl_theme.dart';
 import 'package:voces/ui/campos.dart';
@@ -42,7 +43,7 @@ class _ReproductorState extends State<Reproductor> {
   bool _sonando = false;
   bool _terminado = false;
   bool _cargando = false;
-  bool _listo = false;
+  Future<bool>? _carga;
   double _velocidad = 1;
   String? _error;
 
@@ -51,7 +52,13 @@ class _ReproductorState extends State<Reproductor> {
     super.initState();
     _subs
       ..add(_player.positionStream.listen((p) => mounted ? setState(() => _posicion = p) : null))
-      ..add(_player.durationStream.listen((d) => mounted && d != null ? setState(() => _duracion = d) : null))
+      ..add(
+        _player.durationStream.listen((d) {
+          if (!mounted || d == null) return;
+          setState(() => _duracion = d);
+          Duraciones.guardar(widget.url, d);
+        }),
+      )
       ..add(
         _player.playerStateStream.listen((state) {
           if (!mounted) return;
@@ -65,7 +72,12 @@ class _ReproductorState extends State<Reproductor> {
           });
         }),
       );
-    if (widget.empezar) WidgetsBinding.instance.addPostFrameCallback((_) => _alternar());
+    // Se abre ya para saber cuánto dura antes de darle a «Escuchar».
+    if (widget.empezar) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _alternar());
+    } else {
+      _preparar(avisar: false);
+    }
   }
 
   @override
@@ -78,16 +90,22 @@ class _ReproductorState extends State<Reproductor> {
     super.dispose();
   }
 
-  Future<bool> _preparar() async {
-    if (_listo) return true;
-    try {
-      await _player.setUrl(widget.url);
-      _listo = true;
-      return true;
-    } catch (_) {
-      if (mounted) {
+  Future<bool> _preparar({bool avisar = true}) async {
+    final abierta = await (_carga ??= _abrir());
+    if (!abierta) {
+      _carga = null;
+      if (avisar && mounted) {
         setState(() => _error = 'No se ha podido abrir la grabación. Revisa la conexión y vuelve a pulsar «Escuchar».');
       }
+    }
+    return abierta;
+  }
+
+  Future<bool> _abrir() async {
+    try {
+      await _player.setUrl(widget.url);
+      return true;
+    } catch (_) {
       return false;
     }
   }

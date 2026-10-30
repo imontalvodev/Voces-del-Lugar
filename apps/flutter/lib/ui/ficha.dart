@@ -46,7 +46,7 @@ class FichaHistoria extends StatelessWidget {
       categoria: h.category,
       epoca: decadeLabel(h.decade),
       contadaPor: formato.contadaPor(h.narratorName, h.narratorRelation, deceased: h.narratorDeceased),
-      duracionAudio: h.hasAudio ? (duracionCorta(h.audioSeconds) ?? '') : null,
+      duracionAudio: h.hasAudio ? (duracionCorta(h.segundosAudio) ?? '') : null,
       sello: sello,
       compacta: compacta,
       extra: extra,

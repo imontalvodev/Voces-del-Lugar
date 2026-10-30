@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:voces/api.dart';
+import 'package:voces/duraciones.dart';
 import 'package:voces/escuchar.dart';
 import 'package:voces/links.dart';
 import 'package:voces/navegacion.dart';
@@ -16,6 +17,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final letra = await PreferenciaLetra.cargar();
   await iniciarEscucha();
+  await Duraciones.cargar();
   runApp(VocesApp(letra: letra));
 }
 

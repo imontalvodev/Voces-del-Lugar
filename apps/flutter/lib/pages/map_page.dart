@@ -760,7 +760,7 @@ class _VistaPrevia extends StatelessWidget {
       ?decadeLabel(h.decade),
       contadaPor(h.narratorName, h.narratorRelation, deceased: h.narratorDeceased),
     ].join(' · ');
-    final duracion = duracionCorta(h.audioSeconds);
+    final duracion = duracionCorta(h.segundosAudio);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,

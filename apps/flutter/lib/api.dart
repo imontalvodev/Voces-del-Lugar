@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:voces/duraciones.dart';
 
 const _apiBaseOverride = String.fromEnvironment('API_BASE');
 
@@ -107,6 +108,9 @@ class StoryPin {
 
   /// Duración del primer audio, si la API la sabe.
   final int? audioSeconds;
+
+  /// Duración del primer audio: la de la API o, si no, la medida aquí.
+  int? get segundosAudio => audioSeconds ?? (hasAudio ? Duraciones.de(mediaUrls.first) : null);
   final DateTime? createdAt;
 
   bool get hasAudio => mediaUrls.isNotEmpty;

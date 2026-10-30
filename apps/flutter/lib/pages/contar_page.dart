@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:voces/api.dart';
 import 'package:voces/borrador.dart';
+import 'package:voces/duraciones.dart';
 import 'package:voces/links.dart';
 import 'package:voces/pages/entrar_page.dart';
 import 'package:voces/permisos.dart';
@@ -285,6 +286,7 @@ class ContarPageState extends State<ContarPage> {
       if (!_audioEnviado) {
         if (_b.modo == 'grabar' && _grabacion != null) {
           creada = await widget.api.uploadAudio(creada.id, _grabacion!.nombre, _grabacion!.bytes);
+          if (creada.hasAudio) await Duraciones.guardar(creada.mediaUrls.first, _grabacion!.duracion);
         } else if (_b.modo == 'adjuntar' && _archivo != null) {
           creada = await widget.api.uploadAudio(creada.id, _archivo!.name, await _archivo!.readAsBytes());
         }

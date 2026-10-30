@@ -308,7 +308,7 @@ class _ColaRevision extends StatelessWidget {
                         [
                           h.placeName,
                           categoryLabel(h.category),
-                          h.hasAudio ? ['Audio', ?duracionCorta(h.audioSeconds)].join(' ') : 'Texto',
+                          h.hasAudio ? ['Audio', ?duracionCorta(h.segundosAudio)].join(' ') : 'Texto',
                         ].join(' · '),
                         style: letra.bodySmall!.copyWith(color: c.piedra),
                       ),
